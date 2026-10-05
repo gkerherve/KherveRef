@@ -32,7 +32,10 @@ class _IsolatedSettings(_REAL):
 
 QtCore.QSettings = _IsolatedSettings
 
-assert QtCore.QSettings("kherve", "KherveRef").fileName().startswith(_ROOT)
+# (Qt reports "/" separators even on Windows, so compare normalised paths.)
+assert os.path.normcase(os.path.dirname(os.path.normpath(
+    QtCore.QSettings("kherve", "KherveRef").fileName()))) == \
+    os.path.normcase(os.path.normpath(_ROOT))
 
 # The same for the Qt-free state file (recent libraries for the MCP server).
 from pathlib import Path  # noqa: E402
