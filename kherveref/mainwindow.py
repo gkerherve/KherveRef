@@ -407,12 +407,18 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _new_library(self) -> None:
-        path = QFileDialog.getExistingDirectory(
-            self, "Choose an empty folder for the new library")
+        start = Path.home() / "Documents" / "My References"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "New library — give it a name and choose where it goes",
+            str(start), f"KherveRef library (*{library.SUFFIX})")
         if not path:
             return
+        # "…/Thesis.kref" becomes the folder …/Thesis holding Thesis.kref.
+        folder = Path(path)
+        if folder.suffix.lower() == library.SUFFIX:
+            folder = folder.with_suffix("")
         try:
-            lib = library.create_library(Path(path))
+            lib = library.create_library(folder, folder.name)
         except library.LibraryError as e:
             QMessageBox.warning(self, "New library", str(e))
             return
@@ -421,7 +427,9 @@ class MainWindow(QMainWindow):
         self.open_library(lib.root)
 
     def _open_library_dialog(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Open a library folder")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open a library", str(Path.home()),
+            f"KherveRef library (*{library.SUFFIX} library.json)")
         if path:
             self.open_library(Path(path))
 
@@ -438,6 +446,12 @@ class MainWindow(QMainWindow):
         self._watch(lib)
         self._reload()
         store.write_library_bib(lib, self.entries.values())
+        if lib.migrated:
+            git_backend.commit_all(lib.root, "Tidy the library folder: "
+                                   f"{lib.manifest.name}, PDFs/, library.bib")
+            self.statusBar().showMessage(
+                f"Library folder tidied: open it with {lib.manifest.name}; "
+                "papers are in PDFs/", 8000)
         self._refresh()
         return True
 
@@ -501,7 +515,7 @@ class MainWindow(QMainWindow):
         if lib is not None:
             # Folders, not files: on Windows a watched file is held open,
             # and replacing collections.json then fails ("Access denied").
-            self._watcher.addPaths([str(lib.entries_dir), str(lib.root)])
+            self._watcher.addPaths([str(lib.entries_dir), str(lib.data_dir)])
 
     def _signature(self, entries) -> dict[str, str]:
         return {k: e.modified for k, e in entries.items()}
@@ -818,11 +832,11 @@ class MainWindow(QMainWindow):
         self._start_import(ImportJob(self.library, zotero_dir=d))
 
     def _add_identifiers(self) -> None:
-        text, ok = QInputDialog.getMultiLineText(
-            self, "Add by identifier",
-            "DOIs, arXiv ids or ISBNs — one per line (links work too):")
-        if ok:
-            self._import_text(text)
+        from .add_dialog import AddByIdentifierDialog
+        dlg = AddByIdentifierDialog(self)
+        if dlg.exec() == QDialog.Accepted and dlg.requests():
+            self._start_import(ImportJob(self.library, identifiers=dlg.requests(),
+                                         collection=self._target_collection()))
 
     def _import_text(self, text: str) -> None:
         text = text.strip()
@@ -940,7 +954,7 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
         cmd, paths = req.get("cmd"), [Path(p) for p in req.get("paths", [])]
-        if cmd == "open" and paths and paths[0].is_dir():
+        if cmd == "open" and paths and library.is_library(paths[0]):
             self.open_library(paths[0])
             return
         if cmd not in ("add", "reveal") or not paths:
@@ -1131,7 +1145,7 @@ class MainWindow(QMainWindow):
                                 f"Remove {att.path} from {e.key}?") != QMessageBox.Yes:
             return
         current.files.pop(index)
-        if att.path.startswith("files/"):
+        if att.path.startswith(library.FILES_DIR + "/"):
             (self.library.root / att.path).unlink(missing_ok=True)
         store.save_entry(self.library, current)
         self._commit(f"Remove {att.path} from {e.key}")

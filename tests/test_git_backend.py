@@ -20,8 +20,8 @@ def test_first_commit_on_main(lib):
     assert sha and len(sha) == 7
     assert git_backend.current_branch(lib.root) == "main"
     tracked = {e.path for e in pygit2.Repository(str(lib.root)).index}
-    assert {"library.json", "collections.json", ".gitignore",
-            "entries/.gitkeep", "files/.gitkeep"} <= tracked
+    assert {"lib.kref", ".kherveref/collections.json", ".gitignore",
+            ".kherveref/references/.gitkeep", "PDFs/.gitkeep"} <= tracked
 
 
 def test_nothing_to_commit_returns_none(lib):
@@ -37,7 +37,7 @@ def test_commits_additions_and_deletions(lib):
     entry.unlink()
     assert git_backend.commit_all(lib.root, "Delete smith2020")
     tracked = {e.path for e in pygit2.Repository(str(lib.root)).index}
-    assert "entries/smith2020.json" not in tracked
+    assert ".kherveref/references/smith2020.json" not in tracked
     subjects = [h[3] for h in git_backend.history(lib.root)]
     assert subjects == ["Delete smith2020", "Add smith2020", "Create"]
 
@@ -47,7 +47,7 @@ def test_cache_is_not_committed(lib):
     (lib.cache_dir / "index.sqlite").write_bytes(b"x")
     git_backend.commit_all(lib.root, "Create")
     tracked = {e.path for e in pygit2.Repository(str(lib.root)).index}
-    assert not any(p.startswith(".kherveref") for p in tracked)
+    assert not any(p.startswith(".kherveref/cache") for p in tracked)
     assert not git_backend.has_changes(lib.root)
 
 
@@ -68,7 +68,7 @@ def test_push_and_pull_through_bare_remote(lib, tmp_path):
 
     other = tmp_path / "other"
     subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    (other / "entries" / "doe2021.json").write_text("{}\n")
+    (other / ".kherveref" / "references" / "doe2021.json").write_text("{}\n")
     git_backend.commit_all(other, "Add doe2021")
     assert git_backend.push(other)[0]
 

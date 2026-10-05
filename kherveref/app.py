@@ -6,7 +6,7 @@ import tempfile
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QEvent, QObject, QSettings
 from PySide6.QtWidgets import QApplication
 
 from . import ipc, themes
@@ -23,6 +23,23 @@ def _install_crash_log() -> None:
         sys.__excepthook__(exc_type, exc, tb)
 
     sys.excepthook = _hook
+
+
+class _FileOpenFilter(QObject):
+    """macOS hands a double-clicked .kref (or a PDF dropped on the Dock
+    icon) to the running app as a FileOpen event, not as arguments."""
+
+    def __init__(self, win):
+        super().__init__(win)
+        self._win = win
+
+    def eventFilter(self, obj, event):  # noqa: N802 — Qt override
+        if event.type() == QEvent.FileOpen and event.file():
+            path = event.file()
+            cmd = "add" if path.lower().endswith(".pdf") else "open"
+            self._win.handle_request({"cmd": cmd, "paths": [path]})
+            return True
+        return False
 
 
 def main() -> int:
@@ -51,7 +68,9 @@ def main() -> int:
     win = MainWindow(theme_name=theme_name)
     server = ipc.Server(app)
     server.request.connect(win.handle_request)
-    if request.get("cmd") == "open" and Path(request["paths"][0]).is_dir():
+    app.installEventFilter(_FileOpenFilter(win))
+    from . import library
+    if request.get("cmd") == "open" and library.is_library(request["paths"][0]):
         win.open_library(Path(request["paths"][0]))
     else:
         win.reopen_last_library()

@@ -17,6 +17,9 @@ def test_parse_args():
     assert ipc.parse_args(["--reveal", "a.pdf"]) == {"cmd": "reveal",
                                                      "paths": ["a.pdf"]}
     assert ipc.parse_args(["/lib"]) == {"cmd": "open", "paths": ["/lib"]}
+    assert ipc.parse_args(["/l/Refs.kref"]) == {"cmd": "open",
+                                                "paths": ["/l/Refs.kref"]}
+    assert ipc.parse_args(["a.PDF"]) == {"cmd": "add", "paths": ["a.PDF"]}
     assert ipc.parse_args([]) == {}
     assert ipc.parse_args(["--add"]) == {}
 

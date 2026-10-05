@@ -25,7 +25,7 @@ def test_pdf_with_doi_becomes_full_reference(lib, net, tmp_path):
     assert o.status == importer.ADDED and o.key == "smith2020surface"
     e = store.load_entries(lib)["smith2020surface"]
     assert e.journal == "Applied Surface Science" and not e.needs_review
-    assert e.files[0].path == "files/smith2020surface.pdf"
+    assert e.files[0].path == "PDFs/smith2020surface.pdf"
     assert (lib.root / e.files[0].path).exists()
 
 

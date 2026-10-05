@@ -6,7 +6,7 @@ simply run KherveRef with arguments:
 
     KherveRef --add FILE [FILE...]     import files into the open library
     KherveRef --reveal FILE            select the reference holding FILE
-    KherveRef LIBRARY_DIR              open that library
+    KherveRef LIBRARY.kref             open that library (or its folder)
 
 If KherveRef is already running the request travels over a local socket
 as one JSON line: {"cmd": "add"|"reveal"|"open", "paths": [...]}.
@@ -38,6 +38,8 @@ def parse_args(argv: list[str]) -> dict:
             paths = [a for a in args[i + 1:] if not a.startswith("-")]
             return {"cmd": cmd, "paths": paths} if paths else {}
     paths = [a for a in args if not a.startswith("-")]
+    if paths and paths[0].lower().endswith(".pdf"):
+        return {"cmd": "add", "paths": paths}
     return {"cmd": "open", "paths": paths[:1]} if paths else {}
 
 

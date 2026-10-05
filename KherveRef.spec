@@ -76,5 +76,18 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": __version__,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
+            # Double-clicking a library's .kref opens it in KherveRef.
+            "CFBundleDocumentTypes": [{
+                "CFBundleTypeName": "KherveRef library",
+                "CFBundleTypeRole": "Editor",
+                "LSHandlerRank": "Owner",
+                "LSItemContentTypes": ["com.kherve.kherveref.library"],
+            }],
+            "UTExportedTypeDeclarations": [{
+                "UTTypeIdentifier": "com.kherve.kherveref.library",
+                "UTTypeDescription": "KherveRef library",
+                "UTTypeConformsTo": ["public.json", "public.data"],
+                "UTTypeTagSpecification": {"public.filename-extension": ["kref"]},
+            }],
         },
     )

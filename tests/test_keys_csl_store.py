@@ -62,7 +62,7 @@ def test_store_round_trip(tmp_path):
     assert e.key == "smith2020deep" and e.added
     att = store.attach_file(lib, e, pdf)
     store.save_entry(lib, e)
-    assert att.path == "files/smith2020deep.pdf" and len(att.sha1) == 40
+    assert att.path == "PDFs/smith2020deep.pdf" and len(att.sha1) == 40
     assert store.file_path(lib, att).read_bytes() == b"%PDF-1.4 test"
     assert pdf.exists()
 
@@ -108,7 +108,7 @@ def test_collections_and_library_bib(tmp_path):
     mtime = p.stat().st_mtime_ns
     store.write_library_bib(lib, [e])
     assert p.stat().st_mtime_ns == mtime
-    json.loads((lib.root / "collections.json").read_text())
+    json.loads(lib.collections_path.read_text())
 
 
 def test_doi_link_url_dropped():

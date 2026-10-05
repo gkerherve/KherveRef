@@ -35,11 +35,13 @@ commits do not bump. When in doubt, bump. Major only on request.
 
 ## Decisions already made (don't re-litigate)
 
-- **Library = folder + Git.** `library.json`, `collections.json`,
-  `entries/<key>.json` (one reference per file), `files/<key>.pdf`.
-  Anything in `.kherveref/` (search index) is a rebuildable cache and is
-  git-ignored. Sync is through a **Git remote**; push/pull use the git
-  CLI so the user's own credentials work.
+- **Library = folder + Git.** Visible: `<Name>.kref` (the file the user
+  opens; JSON manifest), `PDFs/`, `library.bib`. Hidden `.kherveref/`:
+  `references/<key>.json` (one reference per file), `collections.json`,
+  `cache/` (git-ignored). `library.py` owns the layout and upgrades
+  format 1 (library.json, entries/, files/) in place. Sync is through a
+  **Git remote**; push/pull use the git CLI so the user's own
+  credentials work.
 - **Internal model is CSL-JSON-like; BibLaTeX is the default export**
   (`journaltitle`, `date`, …), with classic BibTeX as an option.
   Deterministic output: same library ⇒ byte-identical `.bib`.

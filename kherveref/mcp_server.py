@@ -109,7 +109,11 @@ class Tools:
         candidates = [self._explicit] if self._explicit else state.recent_libraries()
         for p in candidates:
             if p and library.is_library(p):
-                return library.open_library(p)
+                lib = library.open_library(p)
+                if lib.migrated:
+                    store.write_library_bib(lib, store.load_entries(lib).values())
+                    git_backend.commit_all(lib.root, "Tidy the library folder")
+                return lib
         raise ToolError("No KherveRef library found. Open or create one in "
                         "KherveRef first, or start the server with "
                         "--library PATH.")

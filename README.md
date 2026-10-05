@@ -59,21 +59,20 @@ into notes on the reference.
 
 ## Libraries
 
-A library is a plain folder, versioned with Git and synced through a Git
-remote (GitHub or any other host):
+A library is a folder, versioned with Git and synced through a Git
+remote (GitHub or any other host). Inside you see only:
 
 ```
-MyLibrary/
-  library.json        name, format, BibTeX dialect
-  library.bib         generated after every change (classic BibTeX, for KherveTeX)
-  collections.json    collections
-  entries/<key>.json  one reference per file
-  files/<key>.pdf     attached PDFs
-  .kherveref/         local search index (not committed)
+My References/
+  My References.kref    the library: double-click to open it in KherveRef
+  PDFs/                 your papers, named by citation key
+  library.bib           every reference as BibTeX, for LaTeX / KherveTeX
 ```
 
-One file per reference keeps diffs readable and lets two machines edit
-different references without merge conflicts.
+KherveRef keeps its own data in a hidden `.kherveref/` folder: one small
+file per reference (so two computers editing different references merge
+cleanly in Git) and the collections. Libraries made by KherveRef 0.1–0.5
+are tidied into this layout the first time they are opened.
 
 ## Roadmap
 

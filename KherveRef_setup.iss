@@ -33,6 +33,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
+ChangesAssociations=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -47,6 +48,13 @@ Source: "dist\KherveRef\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Registry]
+; Double-clicking a library's .kref opens it in KherveRef.
+Root: HKA; Subkey: "Software\Classes\.kref"; ValueType: string; ValueName: ""; ValueData: "KherveRef.Library"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\KherveRef.Library"; ValueType: string; ValueName: ""; ValueData: "KherveRef library"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\KherveRef.Library\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKA; Subkey: "Software\Classes\KherveRef.Library\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
