@@ -69,6 +69,45 @@ class Ollama:
                     return n
         return names[0] if names else None
 
+    def running(self) -> bool:
+        try:
+            self.version()
+            return True
+        except AIError:
+            return False
+
+    def pull(self, model: str, progress: Callable[[float, str], None],
+             cancelled: Callable[[], bool] = lambda: False) -> None:
+        """Download *model* (what `ollama pull` does). *progress* gets the
+        fraction done (-1 while unknown) and Ollama's status text."""
+        req = urllib.request.Request(
+            self.url + "/api/pull",
+            data=json.dumps({"model": model, "stream": True}).encode(),
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=3600) as r:
+                for line in r:
+                    if cancelled():
+                        raise AIError("cancelled")
+                    if not line.strip():
+                        continue
+                    d = json.loads(line)
+                    if d.get("error"):
+                        raise AIError(d["error"])
+                    total, done = d.get("total"), d.get("completed")
+                    frac = done / total if total and done is not None else -1
+                    status = d.get("status", "")
+                    if total:
+                        status += f" — {done / 1e9:.1f} of {total / 1e9:.1f} GB" \
+                            if done is not None else ""
+                    progress(frac, status)
+                    if d.get("status") == "success":
+                        return
+        except urllib.error.HTTPError as e:
+            raise AIError(e.read().decode(errors="replace")[:300]) from None
+        except (urllib.error.URLError, OSError) as e:
+            raise AIError(f"Ollama is not reachable at {self.url} ({e})") from None
+
     def chat(self, model: str, messages: list[dict],
              cancelled: Callable[[], bool] = lambda: False) -> Iterator[str]:
         """Stream the reply's text."""
@@ -170,3 +209,31 @@ def library_messages(lib: Library, entries: list[Entry], question: str,
               "source exactly as given, e.g. [smith2020surface, p. 3]. If the "
               "passages don't answer the question, say which papers come closest."}],
             hits)
+
+
+NOT_COVERED = "Not covered."
+
+
+def each_paper_messages(lib: Library, e: Entry, question: str) -> list[dict]:
+    """The question asked of one paper in a "read every paper" run:
+    short, with pages, or exactly NOT_COVERED."""
+    msgs = question_messages(lib, e, question)
+    msgs[1]["content"] += (
+        "\n\nAnswer in at most three sentences, citing pages as (p. N). If this "
+        f"paper does not address the question, answer exactly: {NOT_COVERED}")
+    return msgs
+
+
+def overview_messages(question: str, answers: list[tuple[Entry, str]]) -> list[dict]:
+    """Combine per-paper answers into one, citing [key]."""
+    found = [(e, a) for e, a in answers
+             if a.strip() and not a.strip().startswith(NOT_COVERED.rstrip("."))]
+    listing = "\n\n".join(f"[{e.key}] {e.title} ({e.year}):\n{a.strip()}"
+                           for e, a in found) or "(no paper addresses it)"
+    return [{"role": "system", "content": SYSTEM},
+            {"role": "user", "content":
+             f"I asked each paper in my library: {question}\n\nTheir answers, "
+             f"labelled with citation keys:\n\n{listing}\n\nWrite a short overview "
+             "that answers the question across these papers: what they agree on, "
+             "where they differ, with numbers where given. Cite every statement as "
+             "[citation key]. Do not add facts that are not in the answers."}]

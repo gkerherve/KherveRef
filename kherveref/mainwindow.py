@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from . import (bibtex, cite, csl, git_backend, icons, importer, library, links,
                state, store, themes, word_addin, word_server, word_sources)
 from . import version_string
-from .ai_panel import AIPanel, AISettingsDialog, AskLibraryDialog
+from .ai_panel import AIPanel, AISetupDialog, AskLibraryDialog
 from .covers import CoversView
 from .editor import EntryEditor
 from .icons import icon
@@ -271,6 +271,8 @@ class MainWindow(QMainWindow):
         split.addWidget(self._views)
         self._ai_panel = AIPanel(lambda: self.library)
         self._ai_panel.add_to_notes.connect(self._append_notes)
+        self._ai_panel.saved.connect(self._ai_saved)
+        self._ai_panel.reveal.connect(self._reveal_key)
         self._side = QTabWidget()
         self._side.setDocumentMode(True)
         self._side.addTab(self._editor, "Details")
@@ -426,8 +428,10 @@ class MainWindow(QMainWindow):
         self.act_ai_ask = A("&Ask the library…", self._ai_ask_library, "ai",
                             "Ctrl+Shift+A", "A question answered from the PDFs "
                             "of your references, with sources")
-        self.act_ai_settings = A("&Local AI settings…",
-                                 lambda: AISettingsDialog(self).exec(), "settings")
+        self.act_ai_settings = A("Set &up local AI…",
+                                 lambda: AISetupDialog(self).exec(), "settings", None,
+                                 "Install Ollama and a model, and choose which "
+                                 "model KherveRef uses")
         self.act_guide = A("KherveRef &User Guide", self._open_guide, "about",
                            QKeySequence.HelpContents)
 
@@ -974,7 +978,7 @@ class MainWindow(QMainWindow):
         self._flush_editor()
         entries = self.selected_entries()
         self._editor.set_entry(entries[0] if len(entries) == 1 else None)
-        self._ai_panel.set_entry(entries[0] if len(entries) == 1 else None)
+        self._ai_panel.set_entries(entries)
         if len(entries) == 1:
             self._editor.set_cover(self._thumbs.pixmap(entries[0]))
         for a in self._selection_actions:
@@ -1846,9 +1850,15 @@ class MainWindow(QMainWindow):
 
     # ----- local AI -----
 
+    def _ai_saved(self, message: str) -> None:
+        """A finished AI run (summaries, answers) is part of the library's
+        history like any other change, and can be undone."""
+        if self.library is not None:
+            self._commit(message)
+
     def _ai_summarise(self) -> None:
-        if len(self.selected_entries()) != 1:
-            self.statusBar().showMessage("Select one paper to summarise", 4000)
+        if not self.selected_entries():
+            self.statusBar().showMessage("Select the paper(s) to summarise", 4000)
             return
         self._side.setCurrentWidget(self._ai_panel)
         self._ai_panel.summarise()
@@ -1860,13 +1870,20 @@ class MainWindow(QMainWindow):
         scopes = []
         sel = self.selected_entries()
         if len(sel) > 1:
-            scopes.append(("The selected references", sel))
-        if self._scope not in (ALL, UNFILED, REVIEW):
-            name = next((c.name for c in self.collections if c.id == self._scope), "")
-            scopes.append((f"Collection “{name}”", self.visible_entries()))
+            scopes.append(("The selected papers", sel))
+        current = self._scope if self._scope not in (ALL, UNFILED, REVIEW) else None
+        cols = sorted(self.collections, key=lambda c: c.id != current)
+        for c in cols:
+            ids = store.collection_and_descendants(self.collections, c.id)
+            members = [e for e in self.entries.values() if ids.intersection(e.collections)]
+            if members:
+                scopes.append((f"Collection “{c.name}”", members))
         scopes.append(("The whole library", list(self.entries.values())))
+        if current is None and len(sel) <= 1:
+            scopes.insert(0, scopes.pop())          # the library first
         dlg = AskLibraryDialog(self.library, scopes, self)
         dlg.reveal.connect(self._reveal_key)
+        dlg.saved.connect(self._ai_saved)
         dlg.show()
 
     def _reveal_key(self, key: str) -> None:

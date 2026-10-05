@@ -86,6 +86,8 @@ def delete_entry(lib: Library, e: Entry) -> None:
     """Remove the reference and the attachments only it uses. (The Git
     history keeps both, so nothing is lost for good.)"""
     entry_path(lib, e.key).unlink(missing_ok=True)
+    from . import ai_store
+    ai_store.delete(lib, e.key)
     for a in e.files:
         if a.path.startswith(FILES_DIR + "/"):
             (lib.root / a.path).unlink(missing_ok=True)
@@ -129,6 +131,11 @@ def rename_keys(lib: Library, entries: dict[str, Entry],
             att.path = f"{FILES_DIR}/{new}{rest}"
     for tmp, final in moved:
         os.replace(tmp, final)
+    from . import ai_store
+    for old, new in mapping.items():
+        ai_store.rename(lib, old, f".renaming-{new}")
+    for new in mapping.values():
+        ai_store.rename(lib, f".renaming-{new}", new)
     renamed = {new: entries.pop(old) for old, new in mapping.items()}
     for new, e in renamed.items():
         e.key = new

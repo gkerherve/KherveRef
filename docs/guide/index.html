@@ -326,23 +326,51 @@ computers merge cleanly.</p>
 <p>KherveRef can read your papers with an AI model that runs <b>on your own computer</b>
 (through <a href="https://ollama.com">Ollama</a>), so your papers are never sent anywhere.</p>
 <h3>Setting up (once)</h3>
+<p><span class="menu">AI ▸ Set up local AI…</span> walks you through it and shows what is already
+on your computer:</p>
 <ol class="steps">
-  <li>Install <a href="https://ollama.com/download">Ollama</a> and open it.</li>
-  <li>In a terminal, download a model: <code>ollama pull qwen3.5:4b</code> (about 3 GB; bigger models answer better but more slowly).</li>
-  <li>Optional: <span class="menu">AI ▸ Local AI settings…</span> to choose the model or check the connection.</li>
+  <li><b>Install Ollama</b> — the free program that runs AI models on your computer. Download it
+    from <a href="https://ollama.com/download">ollama.com/download</a> (Mac, Windows, Linux) and
+    open it once; afterwards it starts with the computer. On a Mac, <code>brew install ollama</code>
+    in Terminal works too.</li>
+  <li><b>Install a model</b> — press <b>Install</b> next to one in the list (the download runs
+    in KherveRef with a progress bar; no Terminal needed), or <code>ollama pull qwen3.5:4b</code>
+    in Terminal.</li>
+  <li><b>Choose it</b> — <b>Use this</b> picks the model KherveRef uses. The dialog suggests one
+    for your computer's memory.</li>
 </ol>
-<h3>One paper: the AI tab</h3>
+<h3>Which model?</h3>
+<table>
+  <thead><tr><th>Model</th><th>Size</th><th>Best for</th></tr></thead>
+  <tbody>
+    <tr><td><b>qwen3.5:4b</b> (Qwen, Alibaba) — recommended</td><td>3.4 GB</td><td>The best all-rounder: clear, structured summaries, careful answers with page numbers, many languages, and long papers read whole. Comfortable with 16 GB of memory.</td></tr>
+    <tr><td><b>granite4:micro-h</b> (Granite, IBM)</td><td>1.9 GB</td><td>Small and fast, light on memory even with long texts; plain, factual style. The choice for a laptop with 8 GB.</td></tr>
+    <tr><td>gemma3:4b (Gemma, Google)</td><td>≈ 3.3 GB</td><td>Natural, readable writing in several languages.</td></tr>
+    <tr><td>llama3.2:3b (Llama, Meta)</td><td>≈ 2 GB</td><td>Quick, good English; weaker on long papers.</td></tr>
+  </tbody>
+</table>
+<p>Bigger models write better but are slower and need more memory — keep the model under about a
+third of your computer's memory. With 32 GB or more, a larger version such as
+<code>qwen3.5:9b</code> gives noticeably better answers. Models made for another purpose (e.g. the
+<i>xps-expert</i> models built for KherveFitting) aren't meant for reading papers.</p>
+<h3>The AI tab: one paper or several</h3>
 <p>Select a reference and open the <b>AI</b> tab next to <b>Details</b>:</p>
 <ul>
   <li><b>Summarise</b> (<span class="menu">AI ▸ Summarise this paper</span>, <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd>) — one sentence, then aim, methods, key findings, conclusions and limitations, with page numbers.</li>
   <li><b>Ask</b> — type a question about the paper (“Which substrate temperature was used?”); the answer cites pages.</li>
-  <li><b>Add to notes</b> keeps the answer with the reference; <b>Copy</b> copies it.</li>
+  <li><b>Everything is kept.</b> The summary and every question you have asked stay with the paper and are shown again whenever you select it — even after restarting, and on your other computers when you sync.</li>
+  <li><b>Several papers:</b> select several references (⌘/Ctrl-click). <b>Summarise each</b> summarises them one after another; a question is asked of <b>each paper</b>, which answers with pages, then an <b>Overview</b> compares them. Each paper keeps its own answer.</li>
+  <li><b>Add to notes</b> copies the newest answer into the paper's notes; <b>Copy</b> copies the text; <b>Stop</b> halts a long run — what was finished is kept.</li>
 </ul>
-<h3>Many papers: Ask the library</h3>
-<p><span class="menu">AI ▸ Ask the library…</span> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>A</kbd>) answers a question
-from the PDFs of the whole library, the current collection, or the selected references. KherveRef
-finds the most relevant passages and the AI answers from them, citing each source as
-<code>[citation key, p. N]</code> — click one to open that reference.</p>
+<h3>A collection or the whole library: Ask the library</h3>
+<p><span class="menu">AI ▸ Ask the library…</span> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>A</kbd>) asks a question of
+the whole library, any collection, or the selected references:</p>
+<ul>
+  <li><b>Quick</b> — KherveRef finds the passages of the PDFs that best match the question and the AI answers from them, in about half a minute.</li>
+  <li><b>Read every paper</b> — every PDF in the scope is asked in turn (about 25 seconds each), then an overview is written. Slower, but nothing is missed; each paper's answer is also kept with that paper.</li>
+</ul>
+<p>Sources appear as <code>[citation key, p. N]</code> — click one to open that reference. Earlier
+questions are listed on the left; click one to read its answer again.</p>
 <div class="note">AI answers can be wrong. They are grounded in the papers' own text and give
 pages so you can check; check anything you rely on. Scanned PDFs without text can't be read.</div>
 <h3>Claude (MCP)</h3>

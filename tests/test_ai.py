@@ -18,6 +18,7 @@ class FakeOllama:
     def __init__(self, models=(("qwen3.5:4b", True), ("granite4:micro-h", False))):
         outer = self
         self.requests = []
+        self.pulled = []
 
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a):
@@ -43,6 +44,16 @@ class FakeOllama:
                 outer.requests.append(body)
                 self.send_response(200)
                 self.end_headers()
+                if self.path == "/api/pull":
+                    for d in ({"status": "pulling manifest"},
+                              {"status": "pulling 1a2b", "total": 2_000_000_000,
+                               "completed": 1_000_000_000},
+                              {"status": "pulling 1a2b", "total": 2_000_000_000,
+                               "completed": 2_000_000_000},
+                              {"status": "success"}):
+                        self.wfile.write(json.dumps(d).encode() + b"\n")
+                    outer.pulled.append(body["model"])
+                    return
                 for piece in ("**In one sentence:** ", "A test ", "summary [demo2020, p. 1]."):
                     self.wfile.write(json.dumps({"message": {"content": piece},
                                                  "done": False}).encode() + b"\n")
@@ -131,53 +142,120 @@ def _wait(cond, seconds=15):
     return cond()
 
 
-def test_window_ai_tab_summarise_and_save(win, ollama, tmp_path):
+def _paper(win, tmp_path, key, words):
+    e = Entry(key=key, title=f"Paper about {words}", date="2020",
+              authors=[Person("Demo", "A")])
+    store.add_entry(win.library, e, win.entries)
+    store.attach_file(win.library, e, make_pdf(tmp_path / f"{key}.pdf",
+                                               [f"Results on {words}."] * 3))
+    store.save_entry(win.library, e)
+    return e
+
+
+def _use(ollama):
     QSettings("kherve", "KherveRef").setValue("ai_url", ollama.url)
     QSettings("kherve", "KherveRef").setValue("ai_model", "")
-    e = Entry(key="demo2020", title="Paper about titania", date="2020")
-    store.add_entry(win.library, e, win.entries)
-    store.attach_file(win.library, e, make_pdf(tmp_path / "d.pdf", ["titania"] * 3))
-    store.save_entry(win.library, e)
+
+
+def test_summary_and_questions_are_kept(win, ollama, tmp_path):
+    from kherveref import ai_store, git_backend
+    _use(ollama)
+    _paper(win, tmp_path, "demo2020", "titania")
+    _paper(win, tmp_path, "zz2001", "copper")
     win._reload(["demo2020"])
-    win._ai_summarise()
     panel = win._ai_panel
+    win._ai_summarise()
     assert win._side.currentWidget() is panel
-    assert _wait(lambda: panel._job is None and "A test summary" in panel._out.text)
-    assert panel._notes.isEnabled()
-    panel._save_to_notes()
-    assert "A test summary" in store.load_entries(win.library)["demo2020"].notes
-    # Each answer is remembered while you look at other references.
-    other = Entry(key="zz2001", title="Another", date="2001")
-    store.add_entry(win.library, other, win.entries)
-    win._reload(["zz2001"])
+    assert _wait(lambda: panel._run is None)
+    assert "A test summary" in panel._out.text
+    panel._question.setText("What was studied?")
+    panel.ask()
+    assert _wait(lambda: panel._run is None)
+    rec = ai_store.load(win.library, "demo2020")
+    assert rec["summary"]["model"] == "qwen3.5:4b"
+    assert rec["qa"][0]["question"] == "What was studied?"
+    assert git_backend.history(win.library.root)[0][3] == "AI answer for demo2020"
+    # Coming back to the paper shows its summary and every question.
+    win._select_keys(["zz2001"])
     assert "A test summary" not in panel._out.text
     win._select_keys(["demo2020"])
-    assert "A test summary" in panel._out.text
+    assert "## Summary" in panel._out.text and "Q: What was studied?" in panel._out.text
+    # ... also after the window is reopened.
+    from kherveref.mainwindow import MainWindow
+    again = MainWindow()
+    again.open_library(win.library.root)
+    again._select_keys(["demo2020"])
+    assert "Q: What was studied?" in again._ai_panel._out.text
+    again.close()
+    panel._save_to_notes()
+    assert "A test summary" in store.load_entries(win.library)["demo2020"].notes
+
+
+def test_several_papers_at_once(win, ollama, tmp_path):
+    from kherveref import ai_store
+    _use(ollama)
+    for k, w in (("aa2020", "titania"), ("bb2021", "copper"), ("cc2022", "zinc")):
+        _paper(win, tmp_path, k, w)
+    win._reload(["aa2020", "bb2021", "cc2022"])
+    panel = win._ai_panel
+    assert panel._summarise.text() == "Summarise each (3)"
+    panel.summarise()
+    assert _wait(lambda: panel._run is None)
+    for k in ("aa2020", "bb2021", "cc2022"):
+        assert ai_store.load(win.library, k)["summary"]
+        assert f"[{k}]" in panel._out.text
+    panel._question.setText("Which material?")
+    panel.ask()
+    assert _wait(lambda: panel._run is None)
+    assert "## Overview" in panel._out.text
+    assert ai_store.load(win.library, "bb2021")["qa"][0]["question"] == "Which material?"
+    assert "kref:aa2020" in panel._out.linkify(panel._out.text)
+
+
+def test_ai_notes_follow_rename_and_delete(win, ollama, tmp_path):
+    from kherveref import ai_store
+    _paper(win, tmp_path, "demo2020", "titania")
+    ai_store.save_summary(win.library, "demo2020", "S", "m")
+    store.rename_keys(win.library, win.entries, {"demo2020": "Demo2020"})
+    assert ai_store.load(win.library, "Demo2020")["summary"]["text"] == "S"
+    store.delete_entry(win.library, win.entries["Demo2020"])
+    assert not ai_store.has_any(win.library, "Demo2020")
 
 
 def test_ai_tab_without_ollama(win, tmp_path):
     QSettings("kherve", "KherveRef").setValue("ai_url", "http://127.0.0.1:9")
-    e = Entry(key="x2020", title="X", date="2020")
-    store.add_entry(win.library, e, win.entries)
-    store.attach_file(win.library, e, make_pdf(tmp_path / "x.pdf", ["text"] * 3))
-    store.save_entry(win.library, e)
+    _paper(win, tmp_path, "x2020", "text")
     win._reload(["x2020"])
     win._ai_panel.summarise()
-    assert _wait(lambda: win._ai_panel._job is None)
-    assert "ollama.com" in win._ai_panel._out.toHtml()
+    assert _wait(lambda: win._ai_panel._run is None)
+    assert "kref-setup:" in win._ai_panel._out.toHtml()
 
 
-def test_ask_library_dialog_links(win, ollama, lib_with_pdf):
+def test_ask_library_quick_thorough_and_history(win, ollama, lib_with_pdf):
+    from kherveref import ai_store
     from kherveref.ai_panel import AskLibraryDialog
-    QSettings("kherve", "KherveRef").setValue("ai_url", ollama.url)
+    _use(ollama)
     lib, entries = lib_with_pdf
     dlg = AskLibraryDialog(lib, [("All", list(entries.values()))])
-    revealed = []
+    saved, revealed = [], []
+    dlg.saved.connect(saved.append)
     dlg.reveal.connect(revealed.append)
     dlg._question.setText("titania photocatalysis")
     dlg.ask()
-    assert _wait(lambda: dlg._job is None and dlg._out.text)
+    assert _wait(lambda: dlg._run is None)
     assert "kref:demo2020" in dlg._out.linkify(dlg._out.text)
+    dlg._thorough.setChecked(True)
+    assert "Read every paper (2)" in dlg._thorough.text()
+    dlg._question.setText("Which material?")
+    dlg.ask()
+    assert _wait(lambda: dlg._run is None)
+    assert "## Overview" in dlg._out.text
+    assert ai_store.load(lib, "other2019")["qa"][0]["question"] == "Which material?"
+    hist = ai_store.history(lib)
+    assert [h["mode"] for h in hist] == ["quick", "every paper"] and len(saved) == 2
+    assert dlg._history.count() == 2
+    dlg._history.setCurrentRow(1)           # the older, quick one
+    assert "titania photocatalysis" in dlg._out.text
     from PySide6.QtCore import QUrl
     dlg._link(QUrl("kref:demo2020"))
     assert revealed == ["demo2020"]
@@ -198,3 +276,52 @@ def test_toolbar_is_icon_only_like_khervecad(win):
     assert tb.toolButtonStyle() == Qt.ToolButtonIconOnly
     assert tb.iconSize().width() == 28
     assert "Add PDFs" in win.act_add_pdfs.toolTip()
+
+
+def test_pull_reports_progress(ollama):
+    seen = []
+    ai.Ollama(ollama.url).pull("gemma3:4b", lambda f, t: seen.append((f, t)))
+    assert ollama.pulled == ["gemma3:4b"]
+    assert seen[0][0] == -1 and seen[1] == (0.5, "pulling 1a2b — 1.0 of 2.0 GB")
+    assert seen[-1][1] == "success"
+
+
+def test_setup_dialog(qapp, ollama, monkeypatch):
+    from kherveref import ai_panel
+    QSettings("kherve", "KherveRef").setValue("ai_url", ollama.url)
+    QSettings("kherve", "KherveRef").setValue("ai_model", "")
+    monkeypatch.setattr(ai_panel, "memory_gb", lambda: 16.0)
+    dlg = ai_panel.AISetupDialog()
+    assert "is running" in dlg._status.text() and "qwen3.5:4b" in dlg._status.text()
+    assert "16 GB" in dlg._step2.text()
+    names = [dlg._table.cellWidget(r, 0).text() for r in range(dlg._table.rowCount())]
+    assert any("qwen3.5:4b" in n for n in names)
+    buttons = {dlg._table.cellWidget(r, 0).text().split("'>")[1].split("<")[0]:
+               dlg._table.cellWidget(r, 3).text() for r in range(dlg._table.rowCount())}
+    assert buttons["qwen3.5:4b"] == "In use ✓"
+    assert buttons["granite4:micro-h"] == "Use this"
+    assert buttons["gemma3:4b"] == "Install"
+    dlg._install("gemma3:4b")
+    assert _wait(lambda: dlg._job is None)
+    assert ollama.pulled == ["gemma3:4b"]
+    assert QSettings("kherve", "KherveRef").value("ai_model") == "gemma3:4b"
+    dlg._use("granite4:micro-h")
+    assert QSettings("kherve", "KherveRef").value("ai_model") == "granite4:micro-h"
+
+
+def test_setup_dialog_without_ollama(qapp, monkeypatch):
+    from kherveref import ai_panel
+    QSettings("kherve", "KherveRef").setValue("ai_url", "http://127.0.0.1:9")
+    monkeypatch.setattr(ai_panel, "ollama_installed", lambda: False)
+    monkeypatch.setattr(ai_panel, "memory_gb", lambda: 8.0)
+    dlg = ai_panel.AISetupDialog()
+    assert "not installed" in dlg._status.text()
+    assert "granite4:micro-h</b> suits it best" in dlg._step2.text()
+    install = dlg._table.cellWidget(0, 3)
+    assert install.text() == "Install" and not install.isEnabled()
+
+
+def test_memory_is_detected():
+    from kherveref.ai_panel import memory_gb
+    m = memory_gb()
+    assert m is None or m > 1

@@ -5,7 +5,7 @@ from pathlib import Path
 
 # "<major>.<minor>" only: the patch (.N commit count) and +sha7 are
 # appended from pygit2 at runtime. See CLAUDE.md for when to bump.
-__version__ = "0.18"
+__version__ = "0.19"
 
 
 def _git_build_info() -> tuple[int, str] | None:
