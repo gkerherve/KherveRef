@@ -8,8 +8,8 @@ from pathlib import Path
 
 from PySide6.QtCore import (QFileSystemWatcher, QItemSelectionModel, QSettings,
                             QSize, Qt, QThread, QTimer, QUrl, Signal)
-from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices, QIcon,
-                           QKeySequence)
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices,
+                           QIcon, QKeySequence)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QFileDialog,
     QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
@@ -1352,6 +1352,15 @@ class MainWindow(QMainWindow):
     def _apply_theme_qss(self) -> None:
         t = self._theme
         self._status.setStyleSheet(themes.status_label_stylesheet(t))
+        # Hover / pressed tints come from the accent: some themes' own
+        # hover colour equals their toolbar colour (Catppuccin Latte).
+        acc = QColor(t["accent"])
+
+        boost = 1.8 if themes.is_dark(self._theme_name) else 1.0
+
+        def tint(alpha: float) -> str:
+            a = min(alpha * boost, 0.9)
+            return f"rgba({acc.red()}, {acc.green()}, {acc.blue()}, {a:.2f})"
         # Flat, rounded, airy: the look of current desktop apps.
         self.setStyleSheet(f"""
             QToolBar#main_toolbar {{
@@ -1359,13 +1368,17 @@ class MainWindow(QMainWindow):
                 border-bottom: 1px solid {t['page_border']};
                 padding: 6px 10px; spacing: 4px;
             }}
-            QToolBar#main_toolbar QToolButton {{
-                border: none; border-radius: 7px; padding: 6px 10px;
-                color: {t['text']};
+            QToolButton {{
+                border: 1px solid transparent; border-radius: 7px;
+                padding: 6px 10px; color: {t['text']};
             }}
-            QToolBar#main_toolbar QToolButton:hover {{ background: {t['tab_hover']}; }}
-            QToolBar#main_toolbar QToolButton:pressed,
-            QToolBar#main_toolbar QToolButton:checked {{ background: {t['alt_base']}; }}
+            QToolButton:hover {{
+                background: {tint(0.14)}; border: 1px solid {tint(0.35)};
+            }}
+            QToolButton:pressed {{ background: {tint(0.28)}; }}
+            QToolButton:checked {{
+                background: {tint(0.20)}; border: 1px solid {tint(0.45)};
+            }}
             QToolBar#main_toolbar QLineEdit {{
                 border: 1px solid {t['page_border']}; border-radius: 15px;
                 padding: 5px 10px; background: {t['base']}; color: {t['text']};

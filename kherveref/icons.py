@@ -185,7 +185,9 @@ def icon(name: str, color: QColor | str | None = None) -> QIcon:
         if not spec:
             continue
         try:
-            ic = qta.icon(spec, color=c)
+            # Under the mouse (QIcon.Active) every icon takes the accent,
+            # so it is obvious which button the pointer is on.
+            ic = qta.icon(spec, color=c, color_active=ACCENT_COLOR)
         except Exception:
             continue
         _ICON_SPECS[ic.cacheKey()] = (name, color)
