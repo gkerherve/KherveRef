@@ -96,10 +96,56 @@ def add_entry(lib: Library, e: Entry, existing: dict[str, Entry]) -> Entry:
     valid and free), save it and register it in *existing*."""
     if not e.key or not is_valid_key(e.key) or e.key.lower() in {
             k.lower() for k in existing}:
-        e.key = unique_key(e, existing.keys())
+        e.key = unique_key(e, existing.keys(), lib.key_style)
     save_entry(lib, e)
     existing[e.key] = e
     return e
+
+
+def rename_keys(lib: Library, entries: dict[str, Entry],
+                mapping: dict[str, str]) -> None:
+    """Give references new keys ({old: new}) and rename the PDFs named
+    after the old key to match. Two passes through temporary names, so
+    keys may swap or chain (a->b, b->c) safely."""
+    mapping = {o: n for o, n in mapping.items() if o in entries and o != n}
+    if not mapping:
+        return
+    moved: list[tuple[Path, Path]] = []
+    for old, new in mapping.items():
+        e = entries[old]
+        entry_path(lib, old).unlink(missing_ok=True)
+        for att in e.files:
+            name = att.path.rsplit("/", 1)[-1]
+            if not att.path.startswith(FILES_DIR + "/") or not name.startswith(old):
+                continue
+            rest = name[len(old):]
+            if rest and rest[0] not in ".-":
+                continue                # another key that merely starts the same
+            src = lib.root / att.path
+            tmp = src.with_name(f".renaming-{new}{rest}")
+            if src.exists():
+                os.replace(src, tmp)
+                moved.append((tmp, src.with_name(new + rest)))
+            att.path = f"{FILES_DIR}/{new}{rest}"
+    for tmp, final in moved:
+        os.replace(tmp, final)
+    renamed = {new: entries.pop(old) for old, new in mapping.items()}
+    for new, e in renamed.items():
+        e.key = new
+        entries[new] = e
+    for new in mapping.values():
+        save_entry(lib, entries[new])
+
+
+def keys_in_style(entries: dict[str, Entry], style: str) -> dict[str, str]:
+    """{old key: key in *style*} for every reference, unique together."""
+    taken: list[str] = []
+    out = {}
+    for old in sorted(entries, key=lambda k: (entries[k].added or "", k)):
+        new = unique_key(entries[old], taken, style)
+        taken.append(new)
+        out[old] = new
+    return out
 
 
 def attach_file(lib: Library, e: Entry, src: Path, copy: bool = True) -> Attachment:

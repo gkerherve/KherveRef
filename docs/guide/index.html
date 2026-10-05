@@ -83,6 +83,7 @@
     <li><a href="#browsing">Browsing &amp; editing</a></li>
     <li><a href="#collections">Collections</a></li>
     <li><a href="#undo">Undo, delete, history</a></li>
+    <li><a href="#latex">Using with LaTeX</a></li>
     <li><a href="#export">Citing &amp; exporting</a></li>
     <li><a href="#word">Microsoft Word</a></li>
     <li><a href="#khervetex">KherveTeX</a></li>
@@ -195,7 +196,7 @@ checking</span> retries them all, for example once you are back online.</p>
   <li><b>Details.</b> The right pane edits the selected reference. Fields relevant to its type are shown; edits are saved with <b>Save</b> (<kbd>Ctrl</kbd><kbd>S</kbd>) or automatically when you select another reference. Click the front page to open the PDF.</li>
   <li><b>Open a PDF</b> by double-clicking the reference. It opens in KhervePDF when installed, otherwise in your usual PDF viewer.</li>
   <li><b>Notes.</b> Your own notes are never exported. <span class="menu">Reference ▸ Copy PDF annotations to notes</span> collects the highlights and comments you made in the PDF.</li>
-  <li><b>Citation keys</b> look like <code>smith2020surface</code> (first author, year, first title word). They never change by themselves, because documents cite them; <span class="menu">Edit ▸ Rename key…</span> changes one deliberately.</li>
+  <li><b>Citation keys</b> look like <code>smith2020surface</code> — the names LaTeX cites; see <a href="#latex">Using with LaTeX</a>. They never change by themselves, because documents cite them.</li>
 </ul>
 
 <h2 id="collections">Collections</h2>
@@ -211,6 +212,55 @@ deletes its references.</p>
   <li><b>Undo / Redo</b> (<kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd>) reverse anything done in the window — a whole folder import, an edit, a delete, a collection change — PDFs included. Undo refuses (and says why) if the same references were changed meanwhile by Claude or a sync, so it never discards someone else's change.</li>
   <li><b>History.</b> <span class="menu">Library ▸ History…</span> lists every change ever made to the library. Undo itself is recorded there, so nothing is ever lost.</li>
 </ul>
+
+<h2 id="latex">Using with LaTeX</h2>
+<h3>Citation keys: the short names LaTeX cites</h3>
+<p>Every reference gets a short name, its <b>citation key</b>, as soon as it is added — for example
+<code>bagarinao2023nanostructured</code>. You see it in the <b>Key</b> column of the list and as
+<b>Cite key</b> at the top of the details. In LaTeX you cite it as
+<code>\cite{bagarinao2023nanostructured}</code>.</p>
+<ul>
+  <li><b>Copy \cite</b> next to the key (or <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd> for the bare key, <span class="menu">Edit ▸ Copy \cite{…}</span> for several references at once).</li>
+  <li><b>Drag</b> references into a LaTeX editor: it receives <code>\cite{key1,key2}</code>.</li>
+  <li><b>Rename…</b> next to the key gives one reference another name.</li>
+</ul>
+<h3>Choosing the style of the names</h3>
+<p><span class="menu">Library ▸ Citation key style</span> sets how new references are named:</p>
+<table>
+  <thead><tr><th>Style</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td>Author, year and first title word (default)</td><td><code>smith2020surface</code></td></tr>
+    <tr><td>Author and year</td><td><code>Smith2020</code>, then <code>Smith2020b</code>…</td></tr>
+    <tr><td>Author and year, lower case</td><td><code>smith2020</code>, then <code>smith2020b</code>…</td></tr>
+  </tbody>
+</table>
+<p><span class="menu">Library ▸ Citation key style ▸ Rename all keys to this style…</span> renames the
+existing references too (their PDFs follow), after showing you the changes. Documents that already
+cite the old names would need updating, so do it before you start writing —
+<span class="menu">Edit ▸ Undo</span> reverses it.</p>
+<h3>Getting the .bib file to LaTeX</h3>
+<p><b>One .bib per paper (recommended).</b> Put a paper's references in a collection, then
+right-click the collection ▸ <b>Export as .bib for LaTeX…</b> and save it next to your
+<code>.tex</code> file, e.g. as <code>refs.bib</code>. (Selecting references and using
+<span class="menu">File ▸ Export classic BibTeX…</span> works too.) Then:</p>
+<pre><code>\documentclass{article}
+\usepackage{natbib}            % for \citep / \citet; optional
+\begin{document}
+Nanostructured electrodes \citep{bagarinao2023nanostructured} …
+
+\bibliographystyle{plainnat}   % or unsrtnat, abbrvnat, ieeetr, …
+\bibliography{refs}            % refs.bib, without “.bib”
+\end{document}</code></pre>
+<p>Run LaTeX, BibTeX, then LaTeX twice (most editors and Overleaf do this for you). On Overleaf,
+upload <code>refs.bib</code> to the project.</p>
+<p><b>The whole library.</b> <code>library.bib</code> in the library folder always holds every
+reference and updates itself. BibTeX can't read paths with spaces, though, so copy it next to your
+<code>.tex</code> (or export) rather than pointing <code>\bibliography{}</code> at a folder such as
+<i>REF Library</i>.</p>
+<p><b>BibLaTeX + biber.</b> If your document uses <code>\usepackage{biblatex}</code>, export with
+<span class="menu">File ▸ Export BibLaTeX…</span> and use <code>\addbibresource{refs.bib}</code> and
+<code>\printbibliography</code>.</p>
+<p><b>KherveTeX</b> does all of this by itself — see <a href="#khervetex">KherveTeX</a>.</p>
 
 <h2 id="export">Citing &amp; exporting</h2>
 <h3>Citation styles</h3>

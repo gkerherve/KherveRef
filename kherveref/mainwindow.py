@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 from pathlib import Path
 
 from PySide6.QtCore import (QEvent, QFileSystemWatcher, QItemSelectionModel,
@@ -27,7 +28,7 @@ from .covers import CoversView
 from .editor import EntryEditor
 from .icons import icon
 from .jobs import ImportJob, LookupJob, SummaryDialog
-from .keys import is_valid_key
+from .keys import KEY_STYLES, is_valid_key
 from .model import Entry
 from .table_model import (ALL, COL_KEY, COL_STATUS, COL_TITLE, KEYS_MIME,
                           REVIEW, UNFILED, RefFilterProxy, RefTableModel)
@@ -247,6 +248,8 @@ class MainWindow(QMainWindow):
         self._editor.open_file_requested.connect(self._open_file)
         self._editor.attach_requested.connect(self._attach_to)
         self._editor.remove_file_requested.connect(self._remove_file)
+        self._editor.rename_requested.connect(self._rename_key)
+        self._editor.copy_cite_requested.connect(self._copy_cite)
 
         split = QSplitter()
         split.addWidget(self._tree)
@@ -352,6 +355,15 @@ class MainWindow(QMainWindow):
                                  self._annotations_to_notes, "notes", None,
                                  "Highlights and comments made in KhervePDF "
                                  "(or any PDF viewer) become notes")
+        self._key_style_group = QActionGroup(self)
+        self._key_style_actions = []
+        for sid, label in KEY_STYLES.items():
+            a = QAction(label, self, checkable=True)
+            a.triggered.connect(lambda _=False, s=sid: self._set_key_style(s))
+            self._key_style_group.addAction(a)
+            self._key_style_actions.append((sid, a))
+        self.act_rekey_all = A("Rename all keys to this style…", self._rekey_all,
+                               "rename")
         self.act_new_collection = A("New &collection…",
                                     lambda: self._new_collection(""), "collection_new")
         self.act_online = QAction("Look up details &online", self, checkable=True)
@@ -461,6 +473,11 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu("&Library")
         m.addAction(self.act_new_collection)
+        m.addSeparator()
+        m_keys = m.addMenu("Citation &key style")
+        m_keys.addActions([a for _sid, a in self._key_style_actions])
+        m_keys.addSeparator()
+        m_keys.addAction(self.act_rekey_all)
         m.addSeparator()
         m.addAction(self.act_history)
         m.addSeparator()
@@ -802,9 +819,19 @@ class MainWindow(QMainWindow):
                            lambda: self._new_collection(scope))
             menu.addAction(icon("rename"), "Rename",
                            lambda: self._tree.editItem(it, 0))
+            menu.addAction(icon("export_bib"), "Export as .bib for LaTeX…",
+                           lambda: self._export_collection(scope))
             menu.addAction(icon("delete"), "Delete collection…",
                            lambda: self._delete_collection(scope))
         menu.exec(self._tree.viewport().mapToGlobal(pos))
+
+    def _export_collection(self, cid: str) -> None:
+        """A .bib of one collection (and its subcollections), e.g. the
+        references of one paper or chapter."""
+        self._scope = cid
+        self._rebuild_tree()
+        self._table.selectionModel().clearSelection()
+        self._export("bibtex")
 
     def _new_collection(self, parent: str) -> None:
         name, ok = QInputDialog.getText(self, "New collection", "Name:")
@@ -1402,11 +1429,13 @@ class MainWindow(QMainWindow):
         entries = self.selected_entries()
         if len(entries) != 1:
             return
+        self._flush_editor()
         e = entries[0]
         new, ok = QInputDialog.getText(
             self, "Rename key",
-            "New citation key.\n\nDocuments that already cite "
-            f"“{e.key}” will need updating.", text=e.key)
+            "New citation key — the name LaTeX cites, as \\cite{key}.\n\n"
+            f"Documents that already cite “{e.key}” will need updating "
+            "(Edit ▸ Undo puts it back).", text=e.key)
         new = new.strip()
         if not ok or not new or new == e.key:
             return
@@ -1418,13 +1447,52 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Rename key", f"“{new}” is already used.")
             return
         old = e.key
-        store.entry_path(self.library, old).unlink(missing_ok=True)
-        self.entries.pop(old, None)
-        e.key = new
-        store.save_entry(self.library, e)
-        self.entries[new] = e
+        store.rename_keys(self.library, self.entries, {old: new})
         self._commit(f"Rename key {old} to {new}")
         self._reload([new])
+
+    def _sync_key_style_menu(self) -> None:
+        style = self.library.key_style if self.library else None
+        for sid, a in self._key_style_actions:
+            a.setChecked(sid == style)
+            a.setEnabled(self.library is not None)
+        self.act_rekey_all.setEnabled(self.library is not None)
+
+    def _set_key_style(self, style: str) -> None:
+        if self.library is None:
+            return
+        library.set_key_style(self.library, style)
+        self._commit(f"Citation key style: {KEY_STYLES[style].split(' — ')[0]}")
+        self._sync_key_style_menu()
+        self.statusBar().showMessage(
+            "New references will be named like "
+            f"{KEY_STYLES[style].split(' — ')[0]}. Library ▸ Citation key style ▸ "
+            "Rename all keys… renames the existing ones.", 8000)
+
+    def _rekey_all(self) -> None:
+        if self.library is None:
+            return
+        self._flush_editor()
+        mapping = {o: n for o, n in store.keys_in_style(
+            self.entries, self.library.key_style).items() if o != n}
+        if not mapping:
+            QMessageBox.information(self, "Rename keys",
+                                    "All keys already follow this style.")
+            return
+        sample = "\n".join(f"{o}  →  {n}" for o, n in list(mapping.items())[:8])
+        more = f"\n… and {len(mapping) - 8} more" if len(mapping) > 8 else ""
+        if QMessageBox.question(
+                self, "Rename keys",
+                f"Rename {len(mapping)} citation key"
+                f"{'s' * (len(mapping) != 1)} to the "
+                f"“{KEY_STYLES[self.library.key_style].split(' — ')[0]}” style?\n\n"
+                f"{sample}{more}\n\nDocuments that cite the old keys will need "
+                "updating. Edit ▸ Undo reverses this.") != QMessageBox.Yes:
+            return
+        store.rename_keys(self.library, self.entries, mapping)
+        self._commit(f"Rename {len(mapping)} keys to "
+                     f"{KEY_STYLES[self.library.key_style].split(' — ')[0]} style")
+        self._reload([])
 
     def _open_first_file(self) -> None:
         entries = self.selected_entries()
@@ -1545,9 +1613,13 @@ class MainWindow(QMainWindow):
         ext = "json" if dialect == "csl" else "bib"
         label = {"biblatex": "BibLaTeX", "bibtex": "BibTeX", "csl": "CSL-JSON"}[dialect]
         last = QSettings(*SETTINGS).value("export_dir", str(Path.home()))
+        name = next((c.name for c in self.collections if c.id == self._scope),
+                    self.library.name)
+        # BibTeX can't read file names with spaces in \bibliography{}.
+        stem = re.sub(r"[^\w\-]+", "-", name).strip("-") or "references"
         path, _ = QFileDialog.getSaveFileName(
             self, f"Export {len(entries)} references as {label}",
-            str(Path(last) / f"{self.library.name}.{ext}"),
+            str(Path(last) / f"{stem}.{ext}"),
             f"{label} (*.{ext})")
         if not path:
             return
@@ -1618,6 +1690,7 @@ class MainWindow(QMainWindow):
 
     def _refresh(self) -> None:
         self._update_undo_actions()
+        self._sync_key_style_menu()
         lib = self.library
         for a in self._library_actions:
             a.setEnabled(lib is not None)

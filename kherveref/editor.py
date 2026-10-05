@@ -76,6 +76,8 @@ class EntryEditor(QWidget):
     lookup_requested = Signal(object)
     open_file_requested = Signal(object, int)
     attach_requested = Signal(object)
+    rename_requested = Signal()
+    copy_cite_requested = Signal()
     remove_file_requested = Signal(object, int)
     dirty_changed = Signal(bool)
 
@@ -110,10 +112,27 @@ class EntryEditor(QWidget):
         self._form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self._form.setLabelAlignment(Qt.AlignRight)
 
+        # The citation key: the short name LaTeX cites (\cite{key}).
         self._key = QLabel()
         self._key.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._key.setStyleSheet("font-weight: bold;")
-        self._form.addRow("Key", self._key)
+        self._key.setToolTip("The citation key: cite it in LaTeX as \\cite{key}")
+        key_row = QWidget()
+        kl = QHBoxLayout(key_row)
+        kl.setContentsMargins(0, 0, 0, 0)
+        kl.addWidget(self._key, 1)
+        self._key_buttons = []
+        for text, tip, sig in (("Copy \\cite", "Copy \\cite{key} for LaTeX",
+                                self.copy_cite_requested),
+                               ("Rename…", "Give this reference another key",
+                                self.rename_requested)):
+            b = QToolButton()
+            b.setText(text)
+            b.setToolTip(tip)
+            b.clicked.connect(sig.emit)
+            kl.addWidget(b)
+            self._key_buttons.append(b)
+        self._form.addRow("Cite key", key_row)
 
         self._type = QComboBox()
         for t, label in ENTRY_TYPES.items():
@@ -249,6 +268,8 @@ class EntryEditor(QWidget):
             return
         self._loading = True
         self._key.setText(e.key or "(assigned when saved)")
+        for b in self._key_buttons:
+            b.setEnabled(bool(e.key))
         self._type.setCurrentIndex(max(0, self._type.findData(e.type)))
         self._review.setChecked(e.needs_review)
         for name, w in self._widgets.items():

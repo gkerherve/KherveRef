@@ -1,7 +1,8 @@
-"""Citation keys: <family><year><first title word>, e.g. smith2020deep.
+"""Citation keys — the short names LaTeX cites, e.g. \\cite{smith2020deep}.
 
-A key is generated once, when a reference enters the library, and is
-never changed afterwards — documents cite it.
+A key is generated when a reference enters the library, in the style
+the library chose (KEY_STYLES), and is not changed afterwards unless the
+user renames it — documents cite it.
 """
 from __future__ import annotations
 
@@ -23,7 +24,16 @@ def _ascii(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.encode("ascii", "ignore").decode().lower())
 
 
-def base_key(e: Entry) -> str:
+# id -> example and description, as offered under Library ▸ Citation key style.
+KEY_STYLES: dict[str, str] = {
+    "author_year_word": "smith2020surface — author, year and first title word",
+    "Author_Year": "Smith2020 — author and year",
+    "author_year": "smith2020 — author and year, lower case",
+}
+DEFAULT_KEY_STYLE = "author_year_word"
+
+
+def base_key(e: Entry, style: str = DEFAULT_KEY_STYLE) -> str:
     people = e.authors or e.editors
     if people:
         p = people[0]
@@ -31,21 +41,25 @@ def base_key(e: Entry) -> str:
                       if p.family else "")
     else:
         name = ""
+    name = name or "anon"
+    if style == "Author_Year":
+        return f"{name.capitalize()}{e.year}"[:40]
+    if style == "author_year":
+        return f"{name}{e.year}"[:40]
     word = ""
     for w in re.findall(r"[^\W_]+", e.title):
         if w.lower() not in _STOPWORDS:
             word = _ascii(w)
             if word:
                 break
-    key = f"{name or 'anon'}{e.year}{word}"
-    return key[:40]
+    return f"{name}{e.year}{word}"[:40]
 
 
-def unique_key(e: Entry, taken) -> str:
+def unique_key(e: Entry, taken, style: str = DEFAULT_KEY_STYLE) -> str:
     """base_key(e), with b, c, ... z, then 2, 3... appended on collision
     (case-insensitive, since some file systems are)."""
     used = {k.lower() for k in taken}
-    base = base_key(e)
+    base = base_key(e, style)
     if base.lower() not in used:
         return base
     for suffix in "bcdefghijklmnopqrstuvwxyz":

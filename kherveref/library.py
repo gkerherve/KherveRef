@@ -48,6 +48,7 @@ class Library:
     name: str
     dialect: str = "biblatex"
     migrated: bool = False      # set when open_library upgraded the layout
+    key_style: str = "author_year_word"     # see keys.KEY_STYLES
 
     @property
     def manifest(self) -> Path:
@@ -168,7 +169,21 @@ def open_library(path: Path) -> Library:
     if not (root / DATA_DIR / COLLECTIONS).exists():
         _write_json(root / DATA_DIR / COLLECTIONS, {"collections": []})
     return Library(root=root, name=data.get("name") or manifest.stem,
-                   dialect=data.get("dialect", "biblatex"), migrated=migrated)
+                   dialect=data.get("dialect", "biblatex"), migrated=migrated,
+                   key_style=data.get("key_style", "author_year_word"))
+
+
+def set_key_style(lib: Library, style: str) -> None:
+    """Remember the library's key style in its .kref, so every computer
+    syncing it names new references the same way."""
+    path = lib.manifest
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {"format": FORMAT_VERSION, "name": lib.name}
+    data["key_style"] = style
+    _write_json(path, data)
+    lib.key_style = style
 
 
 def _upgrade_v1(root: Path) -> None:
