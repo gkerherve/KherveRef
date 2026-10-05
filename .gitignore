@@ -12,3 +12,4 @@ dist/
 !KherveRef.spec
 .DS_Store
 Thumbs.db
+installer/

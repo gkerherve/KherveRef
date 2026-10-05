@@ -89,7 +89,8 @@ different references without merge conflicts.
 6. KhervePDF: attachments open in KhervePDF; KhervePDF's *Add to KherveRef*
    and *Show in KherveRef* reach the running window; PDF highlights and
    comments can be copied into a reference's notes. *(v0.3)*
-7. MCP server for Claude and Zotero import *(v0.4)*; installers.
+7. MCP server for Claude and Zotero import *(v0.4)*; Windows installer and
+   macOS DMGs built and smoke-tested by CI on a `v*` tag.
 
 ## Run
 
@@ -99,6 +100,19 @@ python KherveRef.py
 ```
 
 Python 3.12+, PySide6, PyMuPDF, pygit2, qtawesome.
+
+## Building installers
+
+```
+pip install -r requirements.txt pyinstaller pillow
+python packaging/generate_icon.py
+pyinstaller KherveRef.spec --noconfirm
+python packaging/smoke_test.py dist/KherveRef.app/Contents/MacOS/KherveRef   # or dist/KherveRef/KherveRef.exe
+```
+
+Windows: then `ISCC.exe /DMyAppVersion=<version> KherveRef_setup.iss`.
+CI does all of this when a `v<version>` tag is pushed and uploads the
+installers as workflow artifacts.
 
 ## License
 

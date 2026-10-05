@@ -30,6 +30,9 @@ def main() -> int:
         # The installed app doubles as its MCP server (no window).
         from .mcp_server import main as mcp_main
         return mcp_main([a for a in sys.argv[1:] if a != "--mcp-server"])
+    if "--smoke-test" in sys.argv:
+        from .smoke import run
+        return run()
     _install_crash_log()
     app = QApplication(sys.argv)
     app.setApplicationName("KherveRef")

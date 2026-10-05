@@ -72,3 +72,13 @@ commits do not bump. When in doubt, bump. Major only on request.
 - Tests never touch the user's real QSettings (`tests/conftest.py`).
 - Any change to model, library, BibTeX or git code comes with tests in
   the same commit.
+
+## Releases
+
+`git tag v<__version__> && git push origin v<__version__>` runs
+`.github/workflows/release.yml`: tests, PyInstaller (`KherveRef.spec`),
+`packaging/smoke_test.py` on the frozen app (its `--smoke-test` mode and
+the `--mcp-server` handshake), then the Inno Setup installer and the
+DMGs, uploaded as artifacts. Run the smoke test on any local build
+before handing it out. `--smoke-test` must never write the user's
+settings (it disables `MainWindow._remember`).
