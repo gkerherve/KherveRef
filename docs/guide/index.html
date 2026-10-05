@@ -89,7 +89,7 @@
     <li><a href="#khervetex">KherveTeX</a></li>
     <li><a href="#khervepdf">KhervePDF</a></li>
     <li><a href="#sync">Syncing between computers</a></li>
-    <li><a href="#ai">AI: Claude</a></li>
+    <li><a href="#ai">AI: summaries &amp; questions</a></li>
     <li><a href="#keys">Keyboard shortcuts</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
   </ol>
@@ -322,12 +322,34 @@ libraries — KherveRef need not be running. The cited references are saved insi
 <code>.kref</code> file. Because each reference is its own file, edits to different references on two
 computers merge cleanly.</p>
 
-<h2 id="ai">AI: Claude</h2>
-<p><span class="menu">AI ▸ Connect to Claude (MCP)…</span> shows how to let Claude work with your
-library. Claude can then search it, add papers by DOI, arXiv number, ISBN, PDF or BibTeX, edit and
-file references, and export BibTeX — for example while writing with you. It works on the library
-folder directly, so KherveRef need not be open; an open window shows Claude's changes at once,
-and each change appears in the library's history.</p>
+<h2 id="ai">AI: summaries &amp; questions</h2>
+<p>KherveRef can read your papers with an AI model that runs <b>on your own computer</b>
+(through <a href="https://ollama.com">Ollama</a>), so your papers are never sent anywhere.</p>
+<h3>Setting up (once)</h3>
+<ol class="steps">
+  <li>Install <a href="https://ollama.com/download">Ollama</a> and open it.</li>
+  <li>In a terminal, download a model: <code>ollama pull qwen3.5:4b</code> (about 3 GB; bigger models answer better but more slowly).</li>
+  <li>Optional: <span class="menu">AI ▸ Local AI settings…</span> to choose the model or check the connection.</li>
+</ol>
+<h3>One paper: the AI tab</h3>
+<p>Select a reference and open the <b>AI</b> tab next to <b>Details</b>:</p>
+<ul>
+  <li><b>Summarise</b> (<span class="menu">AI ▸ Summarise this paper</span>, <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd>) — one sentence, then aim, methods, key findings, conclusions and limitations, with page numbers.</li>
+  <li><b>Ask</b> — type a question about the paper (“Which substrate temperature was used?”); the answer cites pages.</li>
+  <li><b>Add to notes</b> keeps the answer with the reference; <b>Copy</b> copies it.</li>
+</ul>
+<h3>Many papers: Ask the library</h3>
+<p><span class="menu">AI ▸ Ask the library…</span> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>A</kbd>) answers a question
+from the PDFs of the whole library, the current collection, or the selected references. KherveRef
+finds the most relevant passages and the AI answers from them, citing each source as
+<code>[citation key, p. N]</code> — click one to open that reference.</p>
+<div class="note">AI answers can be wrong. They are grounded in the papers' own text and give
+pages so you can check; check anything you rely on. Scanned PDFs without text can't be read.</div>
+<h3>Claude (MCP)</h3>
+<p>For harder questions, <span class="menu">AI ▸ Connect to Claude (MCP)…</span> lets Claude work with
+your library: search it, read papers, search their full text, add papers by DOI, arXiv number,
+ISBN, PDF or BibTeX, edit and file references, and export BibTeX. It works on the library folder
+directly, so KherveRef need not be open; an open window shows Claude's changes at once.</p>
 <pre><code>claude mcp add kherveref -- python -m kherveref.mcp_server</code></pre>
 <p>The dialog gives the exact command for your installation, with a button to copy it, and the
 settings for Claude Desktop.</p>
@@ -352,6 +374,8 @@ and <kbd>⌫</kbd> for <kbd>Delete</kbd>; the guide opens with <kbd>⌘</kbd><kb
     <tr><td>Copy citation key</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></td></tr>
     <tr><td>Copy formatted citation / reference</td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>C</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd></td></tr>
     <tr><td>Export BibLaTeX</td><td><kbd>Ctrl</kbd><kbd>E</kbd></td></tr>
+    <tr><td>Summarise this paper (AI)</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd></td></tr>
+    <tr><td>Ask the library (AI)</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>A</kbd></td></tr>
     <tr><td>This guide</td><td><kbd>F1</kbd></td></tr>
   </tbody>
 </table>

@@ -68,11 +68,10 @@ def test_window_views_and_cover(win, tmp_path):
     assert "<img src='file:" in tip and "A paper" in tip
 
 
-def test_icons_are_phosphor_with_accent(qapp):
-    icons.set_accent_color("#ff0000")
+def test_icons_are_material_design_like_khervecad(qapp):
     assert not icons.icon("add_pdf").isNull()
     assert icons.icon_spec(icons.icon("add_pdf")) == ("add_pdf", None)
-    assert "add_pdf" in icons.ACCENTED and icons._PHOSPHOR["add_pdf"].startswith("ph.")
+    assert all(g.startswith("mdi6.") for g in icons._GLYPHS.values())
 
 
 def test_clicking_a_cover_works_like_the_list(win, tmp_path, monkeypatch):

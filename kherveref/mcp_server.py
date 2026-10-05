@@ -18,7 +18,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __version__, bibtex, git_backend, importer, library, state, store
+from . import (__version__, bibtex, fulltext, git_backend, importer, library,
+               state, store)
 from .model import TEXT_FIELDS, Entry, parse_names
 
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -80,6 +81,18 @@ TOOLS: list[dict] = [
      "inputSchema": _obj({"keys": _KEYS, "collection": _STR,
                           "dialect": {"type": "string",
                                       "enum": list(bibtex.DIALECTS)}})},
+    {"name": "read_paper",
+     "description": "The text of a reference's attached PDF, with [page N] "
+                    "markers — to summarise it or answer questions about it. "
+                    "Long papers: ask for a page range.",
+     "inputSchema": _obj({"key": _STR, "first_page": {"type": "integer"},
+                          "last_page": {"type": "integer"}}, ["key"])},
+    {"name": "search_fulltext",
+     "description": "Find passages in the PDFs of the library (or one "
+                    "collection) that match a question; returns the best "
+                    "passages with their citation key and page.",
+     "inputSchema": _obj({"query": _STR, "collection": _STR,
+                          "limit": {"type": "integer"}}, ["query"])},
     {"name": "list_collections",
      "description": "Collections and how many references each holds.",
      "inputSchema": _obj({})},
@@ -244,6 +257,36 @@ class Tools:
                 chosen = [e for e in chosen if ids.intersection(e.collections)]
         return {"count": len(chosen), "missing": missing,
                 "bibtex": bibtex.to_bibtex(chosen, dialect)}
+
+    def read_paper(self, key: str, first_page: int = 1,
+                   last_page: int | None = None) -> dict:
+        lib = self._lib()
+        e = store.load_entries(lib).get(key)
+        if e is None:
+            raise ToolError(f"No reference with key {key!r}")
+        pages = fulltext.pages(lib, e)
+        if not pages:
+            raise ToolError(f"{key} has no PDF with readable text")
+        first = max(1, int(first_page))
+        last = min(len(pages), int(last_page or len(pages)))
+        text = "".join(f"[page {i}]\n{pages[i - 1]}\n"
+                       for i in range(first, last + 1))
+        return {"key": key, "title": e.title, "pages": len(pages),
+                "first_page": first, "last_page": last, "text": text[:200_000]}
+
+    def search_fulltext(self, query: str, collection: str = "",
+                        limit: int = 8) -> dict:
+        lib = self._lib()
+        entries = list(store.load_entries(lib).values())
+        if collection:
+            ids = store.collection_and_descendants(
+                store.load_collections(lib), self._collection_id(lib, collection))
+            entries = [e for e in entries if ids.intersection(e.collections)]
+        hits = fulltext.search(query, fulltext.passages(lib, entries),
+                               top=max(1, min(int(limit), 30)))
+        titles = {e.key: e.title for e in entries}
+        return {"passages": [{"key": p.key, "page": p.page, "title": titles[p.key],
+                              "text": p.text} for p in hits]}
 
     def list_collections(self) -> dict:
         lib = self._lib()

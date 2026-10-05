@@ -3,6 +3,7 @@ details on the right; a start page when no library is open."""
 from __future__ import annotations
 
 import datetime
+import html
 import json
 import re
 from pathlib import Path
@@ -17,13 +18,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QFileDialog,
     QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QProgressDialog, QPushButton, QSizePolicy, QSplitter,
-    QStackedWidget, QTableView, QToolBar, QTreeWidget, QTreeWidgetItem,
+    QStackedWidget, QTabWidget, QTableView, QToolBar, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 from . import (bibtex, cite, csl, git_backend, icons, importer, library, links,
                state, store, themes, word_addin, word_server, word_sources)
 from . import version_string
+from .ai_panel import AIPanel, AISettingsDialog, AskLibraryDialog
 from .covers import CoversView
 from .editor import EntryEditor
 from .icons import icon
@@ -37,6 +39,19 @@ from .thumbnails import Thumbnails
 SETTINGS = ("kherve", "KherveRef")
 MAX_RECENT = 8
 SCOPE_ROLE = Qt.UserRole
+
+
+def _tooltip_with_shortcut(a: QAction) -> None:
+    """Icon-only buttons say what they do: "Add PDFs (⇧⌘P)", plus the
+    longer explanation when the action has one."""
+    name = a.text().replace("&", "").rstrip("…").strip()
+    if not name:
+        return
+    keys = a.shortcut().toString(QKeySequence.NativeText)
+    head = f"{name} ({keys})" if keys else name
+    tip = a.toolTip()
+    a.setToolTip(head if not tip or tip.replace("&", "") == a.text().replace("&", "")
+                 else f"<b>{html.escape(head)}</b><br>{html.escape(tip)}")
 
 
 class _GitJob(QThread):
@@ -254,7 +269,13 @@ class MainWindow(QMainWindow):
         split = QSplitter()
         split.addWidget(self._tree)
         split.addWidget(self._views)
-        split.addWidget(self._editor)
+        self._ai_panel = AIPanel(lambda: self.library)
+        self._ai_panel.add_to_notes.connect(self._append_notes)
+        self._side = QTabWidget()
+        self._side.setDocumentMode(True)
+        self._side.addTab(self._editor, "Details")
+        self._side.addTab(self._ai_panel, icon("ai"), "AI")
+        split.addWidget(self._side)
         split.setStretchFactor(1, 1)
         split.setSizes([210, 760, 390])
         self._stack.addWidget(split)
@@ -399,6 +420,14 @@ class MainWindow(QMainWindow):
         self.act_claude = A("&Connect to Claude (MCP)…", self._show_mcp_help, "claude",
                             None, "Let Claude search, add, edit and export "
                                   "your references")
+        self.act_ai_summary = A("&Summarise this paper", self._ai_summarise, "ai",
+                                "Ctrl+Shift+S", "Your local AI summarises the "
+                                "selected paper (aim, methods, findings…)")
+        self.act_ai_ask = A("&Ask the library…", self._ai_ask_library, "ai",
+                            "Ctrl+Shift+A", "A question answered from the PDFs "
+                            "of your references, with sources")
+        self.act_ai_settings = A("&Local AI settings…",
+                                 lambda: AISettingsDialog(self).exec(), "settings")
         self.act_guide = A("KherveRef &User Guide", self._open_guide, "about",
                            QKeySequence.HelpContents)
 
@@ -409,12 +438,14 @@ class MainWindow(QMainWindow):
             self.act_export_biblatex, self.act_export_bibtex, self.act_export_csl,
             self.act_paste, self.act_find, self.act_lookup_review,
             self.act_new_collection, self.act_history, self.act_remote,
+            self.act_ai_ask,
             self.act_pull, self.act_push]
         self._selection_actions = [
             self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
             self.act_copy_citation, self.act_copy_reference,
             self.act_delete, self.act_open_file, self.act_show_file,
-            self.act_lookup, self.act_rename_key, self.act_annotations]
+            self.act_lookup, self.act_rename_key, self.act_annotations,
+            self.act_ai_summary]
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -484,6 +515,9 @@ class MainWindow(QMainWindow):
         m.addActions([self.act_remote, self.act_pull, self.act_push])
 
         m = mb.addMenu("&AI")
+        m.addActions([self.act_ai_summary, self.act_ai_ask])
+        m.addSeparator()
+        m.addAction(self.act_ai_settings)
         m.addAction(self.act_claude)
 
         self._help_menu = mb.addMenu("&Help")
@@ -492,11 +526,12 @@ class MainWindow(QMainWindow):
         self._help_menu.addAction(self.act_about)
 
     def _build_toolbar(self) -> None:
+        # Icon-only, 28 px, names in tooltips: the KherveCAD toolbar.
         tb = QToolBar("Main")
         tb.setObjectName("main_toolbar")
-        tb.setIconSize(QSize(20, 20))
+        tb.setIconSize(QSize(28, 28))
         tb.setMovable(False)
-        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tb.setToolButtonStyle(Qt.ToolButtonIconOnly)
         for a in (self.act_add_pdfs, self.act_import_folder, self.act_add_id):
             tb.addAction(a)
         tb.addSeparator()
@@ -509,9 +544,7 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
-        for a in (self.act_view_list, self.act_view_covers):
-            tb.addAction(a)
-            tb.widgetForAction(a).setToolButtonStyle(Qt.ToolButtonIconOnly)
+        tb.addActions([self.act_view_list, self.act_view_covers])
         tb.addSeparator()
         self._search = QLineEdit()
         self._search.setPlaceholderText("Search authors, titles, keys, DOIs…")
@@ -521,6 +554,8 @@ class MainWindow(QMainWindow):
         self._search.textChanged.connect(self._search_changed)
         tb.addWidget(self._search)
         self.addToolBar(tb)
+        for a in tb.actions():
+            _tooltip_with_shortcut(a)
 
     # ------------------------------------------------------------------ #
     # Library lifecycle                                                    #
@@ -939,6 +974,7 @@ class MainWindow(QMainWindow):
         self._flush_editor()
         entries = self.selected_entries()
         self._editor.set_entry(entries[0] if len(entries) == 1 else None)
+        self._ai_panel.set_entry(entries[0] if len(entries) == 1 else None)
         if len(entries) == 1:
             self._editor.set_cover(self._thumbs.pixmap(entries[0]))
         for a in self._selection_actions:
@@ -1741,11 +1777,11 @@ class MainWindow(QMainWindow):
             QToolBar#main_toolbar {{
                 background: {t['surface']}; border: none;
                 border-bottom: 1px solid {t['page_border']};
-                padding: 6px 10px; spacing: 4px;
+                padding: 3px 6px; spacing: 2px;
             }}
             QToolButton {{
-                border: 1px solid transparent; border-radius: 7px;
-                padding: 6px 10px; color: {t['text']};
+                border: 1px solid transparent; border-radius: 6px;
+                padding: 4px; margin: 1px; color: {t['text']};
             }}
             QToolButton:hover {{
                 background: {tint(0.14)}; border: 1px solid {tint(0.35)};
@@ -1808,6 +1844,52 @@ class MainWindow(QMainWindow):
             self._rebuild_tree()
             self._model.layoutChanged.emit()
 
+    # ----- local AI -----
+
+    def _ai_summarise(self) -> None:
+        if len(self.selected_entries()) != 1:
+            self.statusBar().showMessage("Select one paper to summarise", 4000)
+            return
+        self._side.setCurrentWidget(self._ai_panel)
+        self._ai_panel.summarise()
+
+    def _ai_ask_library(self) -> None:
+        if self.library is None:
+            return
+        self._flush_editor()
+        scopes = []
+        sel = self.selected_entries()
+        if len(sel) > 1:
+            scopes.append(("The selected references", sel))
+        if self._scope not in (ALL, UNFILED, REVIEW):
+            name = next((c.name for c in self.collections if c.id == self._scope), "")
+            scopes.append((f"Collection “{name}”", self.visible_entries()))
+        scopes.append(("The whole library", list(self.entries.values())))
+        dlg = AskLibraryDialog(self.library, scopes, self)
+        dlg.reveal.connect(self._reveal_key)
+        dlg.show()
+
+    def _reveal_key(self, key: str) -> None:
+        if key in self.entries:
+            self._scope = ALL
+            self._search.clear()
+            self._rebuild_tree()
+            self._select_keys([key])
+            self.raise_()
+
+    def _append_notes(self, key: str, text: str) -> None:
+        e = self.entries.get(key)
+        if e is None:
+            return
+        self._flush_editor()
+        e.notes = (e.notes.rstrip() + "\n\n" + text).strip()
+        store.save_entry(self.library, e)
+        self._commit(f"AI notes for {key}")
+        self._model.update_entry(e)
+        if self._editor.entry is not None and self._editor.entry.key == key:
+            self._editor.set_entry(e)
+        self.statusBar().showMessage(f"Added to the notes of {key}", 4000)
+
     def _open_guide(self) -> None:
         """The guide shipped with the app; the online copy otherwise."""
         local = Path(__file__).resolve().parent / "guide" / "index.html"
@@ -1855,6 +1937,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         QApplication.instance().removeEventFilter(self)
+        self._ai_panel.shutdown()
         if self._word_server is not None:
             self._word_server.stop()
             self._word_server = None

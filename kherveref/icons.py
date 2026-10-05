@@ -1,10 +1,10 @@
 """Runtime icon factory.
 
 No PNG/SVG files are shipped for UI chrome: every icon is a qtawesome
-glyph. The set is Phosphor (thin, rounded, one stroke weight — the look
-of current desktop apps), drawn in one quiet colour taken from the
-theme; only the main "add" actions use the theme's accent colour.
-Material Design glyphs are the fallback for older qtawesome builds.
+glyph — Material Design outline icons, as in KherveCAD, so the Kherve
+apps look alike — drawn in one quiet colour taken from the theme; under
+the mouse an icon takes the theme's accent. Phosphor and Font Awesome
+fill any gap.
 
   * icon(name)            -> QIcon in the theme's icon colour
   * icon(name, color=...) -> QIcon with an explicit override
@@ -59,10 +59,11 @@ _PHOSPHOR: dict[str, str] = {
     "view_covers":  "ph.squares-four",
 }
 
-# The few actions that matter most wear the accent colour.
-ACCENTED = {"add_pdf", "add_folder", "add_doi"}
+# Actions drawn in the accent colour even at rest (none: KherveCAD's
+# toolbar is one colour).
+ACCENTED: set[str] = set()
 
-# Material Design: the fallback where qtawesome predates Phosphor (< 1.3).
+# Material Design outline glyphs — the set KherveCAD uses.
 _GLYPHS: dict[str, str] = {
     # Library
     "new_library":  "mdi6.bookshelf",
@@ -108,7 +109,10 @@ _GLYPHS: dict[str, str] = {
 
     # Help
     "about":        "mdi6.information-outline",
+    "settings":     "mdi6.cog-outline",
     "claude":       "mdi6.robot-outline",
+    "ai":           "mdi6.creation-outline",
+    "word":         "mdi6.microsoft-word",
     "view_list":    "mdi6.format-list-bulleted",
     "view_covers":  "mdi6.view-grid-outline",
 }
@@ -184,7 +188,7 @@ def icon(name: str, color: QColor | str | None = None) -> QIcon:
     c = color if color is not None else (
         ACCENT_COLOR if name in ACCENTED else DEFAULT_COLOR)
     # An unknown glyph name must never take a toolbar down with it.
-    for spec in (_PHOSPHOR.get(name), _GLYPHS.get(name),
+    for spec in (_GLYPHS.get(name), _PHOSPHOR.get(name),
                  _FALLBACK_GLYPHS.get(name), "fa5s.question"):
         if not spec:
             continue
