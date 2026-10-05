@@ -110,7 +110,7 @@ TA  - Short J
 
 def test_ris(tmp_path):
     pdf = make_pdf(tmp_path / "Smith 2020.pdf", ["x"])
-    parsed = formats.parse_ris(RIS.replace("{pdf}", str(pdf).replace(" ", "%20")))
+    parsed = formats.parse_ris(RIS.replace("file://{pdf}", pdf.as_uri()))
     assert len(parsed.records) == 3 and not parsed.warnings[1:]
     a = parsed.records[0]
     e = a.entry
@@ -210,3 +210,14 @@ def test_pasted_text_is_recognised(lib):
     imp.import_text(NBIB)
     imp.import_text(RIS.replace("L1  - file://{pdf}\n", ""))
     assert imp.summary.count(importer.ADDED) == 5
+
+
+def test_file_links(tmp_path, monkeypatch):
+    pdf = make_pdf(tmp_path / "a b.pdf", ["x"])
+    assert formats._local_pdf(pdf.as_uri(), None) == pdf
+    assert formats._local_pdf("a b.pdf", tmp_path) == pdf
+    assert formats._local_pdf("https://x.org/a.pdf", tmp_path) is None
+    monkeypatch.setattr(formats.Path, "is_file", lambda self: True)
+    assert str(formats._local_pdf(r"file://C:\Docs\a.pdf", None)) in (
+        r"C:\Docs\a.pdf", "C:\\Docs\\a.pdf")
+    assert formats._local_pdf("file:///C:/Docs/a%20b.pdf", None).name == "a b.pdf"

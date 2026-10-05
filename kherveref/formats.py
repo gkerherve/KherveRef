@@ -37,9 +37,11 @@ def _local_pdf(ref: str, base_dir: Path | None) -> Path | None:
     if not ref.lower().split("?")[0].endswith(".pdf"):
         return None
     if ref.lower().startswith("file:"):
-        ref = urllib.parse.unquote(urllib.parse.urlparse(ref).path)
-        if re.match(r"^/[A-Za-z]:/", ref):        # file:///C:/...
-            ref = ref[1:]
+        # file:///Users/x, file:///C:/x and the malformed file://C:\x
+        # that some Windows tools write.
+        ref = re.sub(r"^//(localhost)?", "", urllib.parse.unquote(ref[5:]))
+        if re.match(r"^/?[A-Za-z]:[\\/]", ref):
+            ref = ref.lstrip("/")
     elif re.match(r"^[a-z][a-z0-9+.-]*://", ref, re.I):
         return None                                # a web link
     p = Path(ref)
