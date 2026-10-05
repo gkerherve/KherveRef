@@ -49,7 +49,7 @@ class ImportJob(QThread):
                 imp.import_zotero(self.zotero_dir, progress=self.progress.emit,
                                   cancelled=lambda: self._cancel)
             if self.bib_text:
-                imp.import_bib_text(self.bib_text, "Pasted BibTeX")
+                imp.import_text(self.bib_text, "Pasted text")
             if self.paths:
                 imp.run(self.paths, progress=self.progress.emit,
                         cancelled=lambda: self._cancel)

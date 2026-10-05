@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import bibtex, csl, fetch, store
+from . import bibtex, csl, fetch, formats, store
 from .fetch import LookupError_, NetworkError
 from .library import Library
 from .model import Entry
@@ -21,6 +21,11 @@ from .pdf_meta import inspect_pdf
 PDF_EXT = ".pdf"
 BIB_EXT = {".bib", ".bibtex"}
 CSL_EXT = {".json"}
+RIS_EXT = {".ris"}
+NBIB_EXT = {".nbib", ".medline"}
+XML_EXT = {".xml"}               # EndNote XML (checked by content)
+# Everything File ▸ Import accepts, for its file dialog.
+IMPORT_PATTERNS = "*.bib *.bibtex *.ris *.xml *.nbib *.medline *.json"
 
 ADDED = "added"
 ATTACHED = "attached"           # PDF of a reference already in the library
@@ -70,7 +75,11 @@ def expand_paths(paths: Iterable[Path]) -> list[Path]:
             for f in sorted(p.rglob("*")):
                 if any(part.startswith(".") for part in f.relative_to(p).parts):
                     continue
-                if f.is_file() and f.suffix.lower() in {PDF_EXT, *BIB_EXT}:
+                ext = f.suffix.lower()
+                if not f.is_file():
+                    continue
+                if ext in {PDF_EXT, *BIB_EXT, *RIS_EXT, *NBIB_EXT} or (
+                        ext in XML_EXT and _is_endnote_file(f)):
                     out.append(f)
         elif p.is_file():
             out.append(p)
@@ -199,6 +208,51 @@ class Importer:
                 e = csl.from_csl(item)
                 self._import_record(e, f"{source}: {e.key or e.title[:40]}")
 
+    def import_records(self, parsed: "formats.Parsed", source: str) -> None:
+        """RIS / EndNote XML / MEDLINE records, with the PDFs they link."""
+        for w in parsed.warnings:
+            self._record(Outcome(source, NOTE, message=w))
+        for rec in parsed.records:
+            e = rec.entry
+            label = f"{source}: {e.title[:50] or e.key or '(untitled)'}"
+            try:
+                sha1 = store.sha1_of(rec.pdfs[0]) if rec.pdfs else ""
+            except OSError:
+                sha1 = ""
+            dup = self._existing(e, sha1)
+            if dup:
+                if rec.pdfs and not dup.files:
+                    for pdf in rec.pdfs:
+                        store.attach_file(self.lib, dup, pdf)
+                    store.save_entry(self.lib, dup)
+                    self.dups.add(dup)
+                    self._record(Outcome(label, ATTACHED, dup.key))
+                else:
+                    self._record(Outcome(label, DUPLICATE, dup.key))
+                continue
+            o = self._add(e, label, review=not e.title,
+                          pdf=rec.pdfs[0] if rec.pdfs else None)
+            for extra in rec.pdfs[1:]:
+                store.attach_file(self.lib, e, extra)
+                store.save_entry(self.lib, e)
+            if rec.pdfs:
+                o.message = f"{len(rec.pdfs)} PDF(s)"
+
+    def import_text(self, text: str, source: str = "Pasted text",
+                    base_dir: Path | None = None) -> None:
+        """Any supported format, recognised from the text itself."""
+        stripped = text.lstrip("\ufeff \n\r\t")
+        if formats.looks_like_ris(text):
+            self.import_records(formats.parse_ris(text, base_dir), source)
+        elif formats.looks_like_nbib(text):
+            self.import_records(formats.parse_nbib(text), source)
+        elif stripped.startswith("<") and formats.looks_like_endnote(text):
+            self.import_records(formats.parse_endnote_xml(text, base_dir), source)
+        elif stripped.startswith(("[", "{")):
+            self.import_csl_text(text, source)
+        else:
+            self.import_bib_text(text, source, base_dir)
+
     def _import_record(self, e: Entry, source: str,
                        pdf: Path | None = None) -> Outcome:
         dup = self._existing(e)
@@ -316,9 +370,13 @@ class Importer:
                                      path.name, path.parent)
             elif ext in CSL_EXT:
                 self.import_csl_text(path.read_text(encoding="utf-8"), path.name)
+            elif ext in RIS_EXT | NBIB_EXT | XML_EXT or ext == ".txt":
+                self.import_text(_read_text(path), path.name, path.parent)
             else:
                 self._record(Outcome(str(path), FAILED,
-                                     message="not a PDF, .bib or CSL-JSON file"))
+                                     message="not a PDF or a bibliography file "
+                                             "(.bib, .ris, EndNote .xml, .nbib, "
+                                             "CSL .json)"))
         except Exception as err:     # one bad file must not stop a batch
             self._record(Outcome(str(path), FAILED, message=str(err)))
 
@@ -337,6 +395,24 @@ class Importer:
         if self.summary.changed:
             store.write_library_bib(self.lib, self.entries.values())
         return self.summary
+
+
+def _read_text(path: Path) -> str:
+    data = path.read_bytes()
+    for enc in ("utf-8-sig", "utf-16", "cp1252"):
+        try:
+            return data.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
+def _is_endnote_file(path: Path) -> bool:
+    try:
+        with open(path, "rb") as fh:
+            return formats.looks_like_endnote(fh.read(4000).decode("utf-8", "ignore"))
+    except OSError:
+        return False
 
 
 def _bib_file_field(e: Entry, base_dir: Path | None) -> Path | None:

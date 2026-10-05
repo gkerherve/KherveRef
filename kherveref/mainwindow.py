@@ -253,8 +253,10 @@ class MainWindow(QMainWindow):
                                    "and its subfolders")
         self.act_add_id = A("Add by &DOI / arXiv / ISBN…", self._add_identifiers,
                             "add_doi", "Ctrl+Shift+D")
-        self.act_import_bib = A("&Import .bib / CSL-JSON…", self._import_bib_dialog,
-                                "import_bib")
+        self.act_import_bib = A("&Import file (BibTeX, RIS, EndNote, PubMed)…",
+                                self._import_bib_dialog, "import_bib", None,
+                                "Exports from other reference managers: .bib, "
+                                ".ris, EndNote .xml, PubMed .nbib, CSL .json")
         self.act_import_zotero = A("Import from &Zotero…", self._import_zotero,
                                    "zotero", None,
                                    "Every reference, PDF, collection, tag and note "
@@ -803,7 +805,7 @@ class MainWindow(QMainWindow):
     def _import_bib_dialog(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
             self, "Import bibliography", "",
-            "Bibliographies (*.bib *.bibtex *.json);;All files (*)")
+            f"Reference files ({importer.IMPORT_PATTERNS});;All files (*)")
         if files:
             self.import_paths([Path(f) for f in files], self._target_collection())
 
@@ -842,7 +844,10 @@ class MainWindow(QMainWindow):
         text = text.strip()
         if not text:
             return
-        if "@" in text and "{" in text and "=" in text:
+        from . import formats
+        if ("@" in text and "{" in text and "=" in text) or \
+                formats.looks_like_ris(text) or formats.looks_like_nbib(text) or \
+                formats.looks_like_endnote(text):
             self._start_import(ImportJob(self.library, bib_text=text,
                                          collection=self._target_collection()))
             return

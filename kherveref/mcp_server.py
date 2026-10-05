@@ -60,7 +60,8 @@ TOOLS: list[dict] = [
      "inputSchema": _obj({"identifier": _STR, "collection": _STR},
                          ["identifier"])},
     {"name": "add_bibtex",
-     "description": "Add references from BibTeX / BibLaTeX source text.",
+     "description": "Add references from exported text: BibTeX/BibLaTeX, "
+                    "RIS, EndNote XML, PubMed MEDLINE (.nbib) or CSL-JSON.",
      "inputSchema": _obj({"bibtex": _STR, "collection": _STR}, ["bibtex"])},
     {"name": "add_pdf",
      "description": "Add a PDF file (or every PDF in a folder) from this "
@@ -191,7 +192,7 @@ class Tools:
 
     def add_bibtex(self, bibtex: str, collection: str = "") -> dict:
         lib = self._lib()
-        return self._run_import(lib, lambda imp: imp.import_bib_text(bibtex, "BibTeX"),
+        return self._run_import(lib, lambda imp: imp.import_text(bibtex, "Text"),
                                 collection, "Add BibTeX via Claude")
 
     def add_pdf(self, path: str, collection: str = "") -> dict:

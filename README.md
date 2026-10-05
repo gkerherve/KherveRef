@@ -18,9 +18,18 @@ Same look and themes as the rest of the Kherve suite.
   *Look up details* tries again later.
 - The same PDF, DOI, arXiv id or ISBN is never added twice; a PDF for a
   reference you already have is attached to it.
-- **Paste or drop** DOIs, arXiv ids, ISBNs or BibTeX text, or import
-  `.bib` and CSL-JSON files (PDFs named in JabRef/Zotero `file` fields
-  come along).
+- **Paste or drop** DOIs, arXiv ids, ISBNs or exported reference text.
+- **Import from other reference managers** (*File ▸ Import file…*, or
+  drop the file):
+
+  | Format | From | PDFs come along |
+  |---|---|---|
+  | Zotero library (*Import from Zotero…*) | Zotero | yes, plus collections, tags, notes |
+  | BibTeX / BibLaTeX `.bib` | JabRef, BibDesk, Mendeley, Citavi, Paperpile… | when a `file` field points at them |
+  | RIS `.ris` | EndNote, Mendeley, Papers, Web of Science, Scopus, journals | when `L1` / `file://` links point at them |
+  | EndNote XML `.xml` | EndNote | yes, from the library's `.Data/PDF` folder next to the export |
+  | PubMed `.nbib` / MEDLINE | PubMed "Save → PubMed format" | — |
+  | CSL-JSON `.json` | Zotero, Paperpile, others | — |
 - Drag references onto a collection to file them; drag them into a text
   editor to get `\cite{key}`.
 
