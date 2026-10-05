@@ -294,10 +294,15 @@ def test_setup_dialog(qapp, ollama, monkeypatch):
     dlg = ai_panel.AISetupDialog()
     assert "is running" in dlg._status.text() and "qwen3.5:4b" in dlg._status.text()
     assert "16 GB" in dlg._step2.text()
+    assert "qwen3.5:4b</a> ★" in "".join(
+        dlg._table.cellWidget(r, 0).text() for r in range(dlg._table.rowCount()))
+    big = next(r for r in range(dlg._table.rowCount())
+               if "qwen3.5:27b" in dlg._table.cellWidget(r, 0).text())
+    assert "too big here" in dlg._table.item(big, 2).text()
     names = [dlg._table.cellWidget(r, 0).text() for r in range(dlg._table.rowCount())]
     assert any("qwen3.5:4b" in n for n in names)
     buttons = {dlg._table.cellWidget(r, 0).text().split("'>")[1].split("<")[0]:
-               dlg._table.cellWidget(r, 3).text() for r in range(dlg._table.rowCount())}
+               dlg._table.cellWidget(r, 4).text() for r in range(dlg._table.rowCount())}
     assert buttons["qwen3.5:4b"] == "In use ✓"
     assert buttons["granite4:micro-h"] == "Use this"
     assert buttons["gemma3:4b"] == "Install"
@@ -317,7 +322,7 @@ def test_setup_dialog_without_ollama(qapp, monkeypatch):
     dlg = ai_panel.AISetupDialog()
     assert "not installed" in dlg._status.text()
     assert "granite4:micro-h</b> suits it best" in dlg._step2.text()
-    install = dlg._table.cellWidget(0, 3)
+    install = dlg._table.cellWidget(0, 4)
     assert install.text() == "Install" and not install.isEnabled()
 
 
@@ -325,3 +330,42 @@ def test_memory_is_detected():
     from kherveref.ai_panel import memory_gb
     m = memory_gb()
     assert m is None or m > 1
+
+
+def test_model_suggestions_and_names():
+    from kherveref.ai_panel import RECOMMENDED, suggested
+    assert suggested(8) == "granite4:micro-h" and suggested(16) == "qwen3.5:4b"
+    assert suggested(32) == "qwen3.5:9b" and suggested(96) == "qwen3.5:27b"
+    assert all(n in {r[0] for r in RECOMMENDED} for n in
+               (suggested(8), suggested(16), suggested(32), suggested(96)))
+    assert ai.same_model("phi4-mini", "phi4-mini:latest")
+    assert not ai.same_model("qwen3.5:4b", "qwen3.5:9b")
+
+
+def test_gpt_oss_reasons_low(qapp):
+    f = FakeOllama(models=(("gpt-oss:20b", True), ("phi4-mini:latest", False)))
+    try:
+        c = ai.Ollama(f.url)
+        "".join(c.chat("gpt-oss:20b", [{"role": "user", "content": "hi"}]))
+        assert f.requests[-1]["think"] == "low"
+        "".join(c.chat("phi4-mini", [{"role": "user", "content": "hi"}]))
+        assert "think" not in f.requests[-1]
+    finally:
+        f.close()
+
+
+def test_refresh_button_finds_newly_installed_model(qapp, monkeypatch):
+    from kherveref import ai_panel
+    models = [("qwen3.5:4b", True)]
+    f = FakeOllama(models=models)
+    try:
+        QSettings("kherve", "KherveRef").setValue("ai_url", f.url)
+        QSettings("kherve", "KherveRef").setValue("ai_model", "")
+        monkeypatch.setattr(ai_panel, "memory_gb", lambda: 16.0)
+        dlg = ai_panel.AISetupDialog()
+        assert dlg._others.count() == 0
+        models.append(("mistral-nemo:12b", False))        # installed from Terminal
+        dlg._refresh.click()
+        assert dlg._others.count() == 1 and dlg._others.itemData(0) == "mistral-nemo:12b"
+    finally:
+        f.close()

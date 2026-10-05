@@ -6,7 +6,7 @@ import html
 import re
 import time
 
-from PySide6.QtCore import QSettings, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QSettings, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
@@ -648,20 +648,46 @@ class AskLibraryDialog(QDialog):
 DOWNLOAD_URL = "https://ollama.com/download"
 LIBRARY_URL = "https://ollama.com/library/"
 
-#: (model, size on disk, maker, what it is good for) — the same choices
-#: as KherveNote's set-up, described for reading papers.
+#: (model, download GB, maker, memory it wants in GB, what it is good for),
+#: smallest first. Sizes checked on ollama.com/library.
 RECOMMENDED = (
-    ("qwen3.5:4b", "3.4 GB", "Qwen — Alibaba",
-     "Recommended. The best all-rounder for papers: clear, structured summaries, "
-     "careful answers with page numbers, many languages, and long papers read whole."),
-    ("granite4:micro-h", "1.9 GB", "Granite — IBM",
-     "Small and fast, light on memory even with long texts. Plain, factual style; "
-     "fewer languages. A good choice on a laptop with 8 GB."),
-    ("gemma3:4b", "≈ 3.3 GB", "Gemma — Google",
-     "Natural, readable writing in several languages. Similar size to Qwen."),
-    ("llama3.2:3b", "≈ 2 GB", "Llama — Meta",
+    ("granite4:micro-h", 1.9, "Granite — IBM", 8,
+     "Small and fast, light on memory even with long papers. Plain, factual "
+     "style; fewer languages. The choice for a laptop with 8 GB."),
+    ("llama3.2:3b", 2.0, "Llama — Meta", 8,
      "Quick, good English; weaker on long papers and other languages."),
+    ("phi4-mini", 2.5, "Phi — Microsoft", 8,
+     "Strong reasoning and maths for its size; English first. Good at "
+     "questions that need working things out."),
+    ("qwen3.5:4b", 3.4, "Qwen — Alibaba", 16,
+     "Recommended. The best all-rounder for papers: clear, structured summaries, "
+     "careful answers with page numbers, many languages, long papers read whole."),
+    ("gemma3:4b", 3.3, "Gemma — Google", 16,
+     "Natural, readable writing in several languages. Similar to Qwen 4B."),
+    ("qwen3.5:9b", 6.6, "Qwen — Alibaba", 32,
+     "The bigger Qwen: noticeably better summaries and answers than 4B, a "
+     "little slower. The best choice with 32 GB."),
+    ("ministral-3:8b", 6.0, "Ministral — Mistral AI", 32,
+     "Strong in French and other European languages; concise answers."),
+    ("gemma3:12b", 8.1, "Gemma — Google", 32,
+     "Very readable, careful writing; good at long summaries."),
+    ("gpt-oss:20b", 14.0, "gpt-oss — OpenAI", 48,
+     "OpenAI's open model: the strongest reasoning here, for hard questions "
+     "across many papers. Slower."),
+    ("qwen3.5:27b", 17.0, "Qwen — Alibaba", 64,
+     "The highest-quality model listed; needs a big computer (64 GB or more)."),
 )
+
+
+def suggested(mem: float | None) -> str:
+    """The model to suggest for *mem* GB of memory."""
+    if mem is None or mem <= 12:
+        return "granite4:micro-h" if mem else "qwen3.5:4b"
+    if mem < 30:
+        return "qwen3.5:4b"
+    if mem < 60:
+        return "qwen3.5:9b"
+    return "qwen3.5:27b"
 
 
 def memory_gb() -> float | None:
@@ -756,6 +782,7 @@ class AISetupDialog(QDialog):
         get = QPushButton("Download Ollama…")
         get.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(DOWNLOAD_URL)))
         again = QPushButton("Check again")
+        again.setToolTip("Look again for Ollama and the installed models")
         again.clicked.connect(self.refresh)
         row1 = QHBoxLayout()
         row1.addWidget(get)
@@ -765,8 +792,9 @@ class AISetupDialog(QDialog):
         self._step2 = QLabel()
         self._step2.setWordWrap(True)
         self._step2.setOpenExternalLinks(True)
-        self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["Model", "Size", "What it is good for", ""])
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(
+            ["Model", "Download", "Memory", "What it is good for", ""])
         self._table.verticalHeader().setVisible(False)
         self._table.setWordWrap(True)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -774,8 +802,13 @@ class AISetupDialog(QDialog):
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(2, QHeaderView.Stretch)
-        h.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.Stretch)
+        h.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self._refresh = QPushButton(icon("recent"), "Refresh list")
+        self._refresh.setToolTip("Look again for installed models — e.g. after "
+                                 "installing one from Terminal")
+        self._refresh.clicked.connect(self.refresh)
         self._bar = QProgressBar()
         self._bar.hide()
         self._bar_label = QLabel()
@@ -814,6 +847,12 @@ class AISetupDialog(QDialog):
         lay.addLayout(row1)
         lay.addWidget(self._step2)
         lay.addWidget(self._table, 1)
+        refresh_row = QHBoxLayout()
+        self._fits_note = QLabel()
+        self._fits_note.setStyleSheet("color: gray;")
+        refresh_row.addWidget(self._fits_note, 1)
+        refresh_row.addWidget(self._refresh)
+        lay.addLayout(refresh_row)
         lay.addWidget(self._bar_label)
         lay.addWidget(self._bar)
         lay.addWidget(step3)
@@ -836,7 +875,7 @@ class AISetupDialog(QDialog):
 
     def current(self, installed: list[str]) -> str | None:
         chosen = QSettings(*SETTINGS).value("ai_model", "")
-        if chosen in installed:
+        if chosen and any(ai.same_model(chosen, n) for n in installed):
             return chosen
         return self._client().default_model() if installed else None
 
@@ -864,9 +903,8 @@ class AISetupDialog(QDialog):
                 "<b>Check again</b>.</p>")
         advice = ""
         if mem:
-            pick = "granite4:micro-h" if mem <= 8.5 else "qwen3.5:4b"
             advice = (f" This computer has <b>{mem:.0f} GB</b> of memory: "
-                      f"<b>{pick}</b> suits it best.")
+                      f"<b>{suggested(mem)}</b> suits it best.")
         self._step2.setText(
             "<h3>2. Install a model, and choose it</h3><p>A model is the AI itself. Bigger "
             "models write better but are slower and need more memory — as a rough guide, "
@@ -874,26 +912,37 @@ class AISetupDialog(QDialog):
             f" Each name links to its page on <a href='{LIBRARY_URL}'>ollama.com</a>, "
             "where larger and smaller versions are listed.</p>")
         self._table.setRowCount(0)
-        for name, size, maker, good in RECOMMENDED:
+        pick = suggested(mem) if mem else None
+        for name, size, maker, needs, good in RECOMMENDED:
             r = self._table.rowCount()
             self._table.insertRow(r)
-            link = QLabel(f"<a href='{LIBRARY_URL}{name.split(':')[0]}'>{name}</a><br>"
-                          f"<span style='color:gray'>{maker}</span>")
+            star = " ★" if name == pick else ""
+            link = QLabel(f"<a href='{LIBRARY_URL}{name.split(':')[0]}'>{name}</a>{star}"
+                          f"<br><span style='color:gray'>{maker}</span>")
             link.setOpenExternalLinks(True)
             link.setContentsMargins(6, 4, 6, 4)
             self._table.setCellWidget(r, 0, link)
-            self._table.setItem(r, 1, QTableWidgetItem(size))
-            self._table.setItem(r, 2, QTableWidgetItem(good))
-            self._table.setCellWidget(r, 3, self._button(name, installed, current, running))
+            self._table.setItem(r, 1, QTableWidgetItem(f"{size:g} GB"))
+            fits = mem is None or needs <= mem + 0.5
+            need_item = QTableWidgetItem(f"{needs} GB+" + ("" if fits else "  (too big here)"))
+            if not fits:
+                need_item.setForeground(Qt.gray)
+            self._table.setItem(r, 2, need_item)
+            self._table.setItem(r, 3, QTableWidgetItem(good))
+            self._table.setCellWidget(r, 4, self._button(name, installed, current, running))
+        if mem:
+            self._fits_note.setText(f"★ suggested for this computer ({mem:.0f} GB). "
+                                    "Memory = what the computer should have.")
         self._table.resizeRowsToContents()
         self._others.clear()
-        listed = {n for n, *_ in RECOMMENDED}
+        listed = {n for n, *_ in RECOMMENDED} | {f"{n}:latest" for n, *_ in RECOMMENDED}
         for n in installed:
             if n not in listed:
                 self._others.addItem(n + ("  (in use)" if n == current else ""), n)
 
     def _button(self, name, installed, current, running) -> QPushButton:
-        if name == current:
+        installed = set(installed) | {n.removesuffix(":latest") for n in installed}
+        if current and ai.same_model(name, current):
             b = QPushButton("In use ✓")
             b.setEnabled(False)
         elif name in installed:

@@ -20,8 +20,8 @@ from .model import Entry
 
 DEFAULT_URL = "http://127.0.0.1:11434"
 # Preferred when installed, in order; otherwise the first model listed.
-PREFERRED = ("qwen3.5", "qwen3", "llama3.2", "llama3.1", "gemma3", "mistral",
-             "granite4", "phi4", "phi3")
+PREFERRED = ("qwen3.5", "qwen3", "gemma3", "ministral", "llama3.2", "llama3.1",
+             "mistral", "phi4", "granite4", "gpt-oss", "phi3")
 PAPER_CHARS = 60_000        # ~15k tokens: most papers whole
 CONTEXT_TOKENS = 32_768
 
@@ -35,6 +35,11 @@ class Model:
     name: str
     size: str
     thinking: bool          # supports (and would by default use) reasoning
+
+
+def same_model(a: str, b: str) -> bool:
+    """"phi4-mini" and "phi4-mini:latest" are one model."""
+    return a.removesuffix(":latest") == b.removesuffix(":latest")
 
 
 class Ollama:
@@ -111,11 +116,13 @@ class Ollama:
     def chat(self, model: str, messages: list[dict],
              cancelled: Callable[[], bool] = lambda: False) -> Iterator[str]:
         """Stream the reply's text."""
-        thinking = any(m.name == model and m.thinking for m in self.models())
+        thinking = any(same_model(m.name, model) and m.thinking for m in self.models())
         body = {"model": model, "messages": messages, "stream": True,
                 "options": {"num_ctx": CONTEXT_TOKENS, "temperature": 0.2}}
         if thinking:
-            body["think"] = False       # answers, not pages of reasoning
+            # Answers, not pages of reasoning. gpt-oss cannot switch it off,
+            # only down to "low".
+            body["think"] = "low" if model.startswith("gpt-oss") else False
         req = urllib.request.Request(self.url + "/api/chat",
                                      data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"})

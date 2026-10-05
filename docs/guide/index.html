@@ -340,19 +340,26 @@ on your computer:</p>
     for your computer's memory.</li>
 </ol>
 <h3>Which model?</h3>
+<p>Pick by your computer's memory (the set-up window suggests one with a ★ and greys out models
+too big for it). Bigger models write better but are slower.</p>
 <table>
-  <thead><tr><th>Model</th><th>Size</th><th>Best for</th></tr></thead>
+  <thead><tr><th>Memory</th><th>Model</th><th>Download</th><th>Best for</th></tr></thead>
   <tbody>
-    <tr><td><b>qwen3.5:4b</b> (Qwen, Alibaba) — recommended</td><td>3.4 GB</td><td>The best all-rounder: clear, structured summaries, careful answers with page numbers, many languages, and long papers read whole. Comfortable with 16 GB of memory.</td></tr>
-    <tr><td><b>granite4:micro-h</b> (Granite, IBM)</td><td>1.9 GB</td><td>Small and fast, light on memory even with long texts; plain, factual style. The choice for a laptop with 8 GB.</td></tr>
-    <tr><td>gemma3:4b (Gemma, Google)</td><td>≈ 3.3 GB</td><td>Natural, readable writing in several languages.</td></tr>
-    <tr><td>llama3.2:3b (Llama, Meta)</td><td>≈ 2 GB</td><td>Quick, good English; weaker on long papers.</td></tr>
+    <tr><td rowspan="3">8 GB</td><td>granite4:micro-h (IBM)</td><td>1.9 GB</td><td>Fastest and lightest; plain, factual style.</td></tr>
+    <tr><td>llama3.2:3b (Meta)</td><td>2.0 GB</td><td>Quick, good English.</td></tr>
+    <tr><td>phi4-mini (Microsoft)</td><td>2.5 GB</td><td>Strong reasoning and maths for its size.</td></tr>
+    <tr><td rowspan="2">16 GB</td><td><b>qwen3.5:4b</b> (Alibaba) — recommended</td><td>3.4 GB</td><td>The best all-rounder: structured summaries, answers with pages, many languages, long papers.</td></tr>
+    <tr><td>gemma3:4b (Google)</td><td>3.3 GB</td><td>Natural, readable writing.</td></tr>
+    <tr><td rowspan="3">32 GB</td><td><b>qwen3.5:9b</b> (Alibaba)</td><td>6.6 GB</td><td>Noticeably better summaries and answers than 4B.</td></tr>
+    <tr><td>ministral-3:8b (Mistral AI)</td><td>6.0 GB</td><td>Strong in French and other European languages.</td></tr>
+    <tr><td>gemma3:12b (Google)</td><td>8.1 GB</td><td>Very readable, careful long summaries.</td></tr>
+    <tr><td rowspan="2">48–64 GB+</td><td>gpt-oss:20b (OpenAI)</td><td>14 GB</td><td>Strongest reasoning, for hard questions across many papers; slower.</td></tr>
+    <tr><td>qwen3.5:27b (Alibaba)</td><td>17 GB</td><td>The highest quality listed.</td></tr>
   </tbody>
 </table>
-<p>Bigger models write better but are slower and need more memory — keep the model under about a
-third of your computer's memory. With 32 GB or more, a larger version such as
-<code>qwen3.5:9b</code> gives noticeably better answers. Models made for another purpose (e.g. the
-<i>xps-expert</i> models built for KherveFitting) aren't meant for reading papers.</p>
+<p>A model installed from Terminal (<code>ollama pull …</code>) appears after <b>Refresh list</b>,
+under <i>Other installed models</i>. Models made for another purpose (e.g. the <i>xps-expert</i>
+models built for KherveFitting) aren't meant for reading papers.</p>
 <h3>The AI tab: one paper or several</h3>
 <p>Select a reference and open the <b>AI</b> tab next to <b>Details</b>:</p>
 <ul>
