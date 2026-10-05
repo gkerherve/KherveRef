@@ -1,3 +1,9 @@
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
 import pymupdf
 from PySide6.QtWidgets import QApplication
 
@@ -16,18 +22,27 @@ def test_parse_args():
 
 
 def test_request_reaches_running_instance(qapp, monkeypatch):
-    monkeypatch.setattr(ipc, "server_name", lambda: "kherveref-test-ipc")
+    # The sender is another process, as when KhervePDF launches KherveRef.
+    monkeypatch.setenv("KHERVEREF_IPC_NAME", f"kherveref-test-{os.getpid()}")
     server = ipc.Server(qapp)
     got = []
     server.request.connect(got.append)
+    code = ("import sys; from PySide6.QtCore import QCoreApplication; "
+            "from kherveref import ipc; app = QCoreApplication([]); "
+            "sys.exit(0 if ipc.send_to_running("
+            "{'cmd': 'add', 'paths': ['x.pdf']}) else 1)")
+    proc = subprocess.Popen([sys.executable, "-c", code],
+                            cwd=str(Path(__file__).resolve().parent.parent))
     try:
-        assert ipc.send_to_running({"cmd": "add", "paths": ["x.pdf"]})
-        for _ in range(200):
+        deadline = time.monotonic() + 30
+        while (proc.poll() is None or not got) and time.monotonic() < deadline:
             QApplication.processEvents()
-            if got:
-                break
+            time.sleep(0.01)
+        assert proc.wait(5) == 0
         assert got == [{"cmd": "add", "paths": ["x.pdf"]}]
     finally:
+        if proc.poll() is None:
+            proc.kill()
         server.request.disconnect()
         server.close()
         for _ in range(20):
@@ -35,7 +50,7 @@ def test_request_reaches_running_instance(qapp, monkeypatch):
 
 
 def test_no_running_instance(qapp, monkeypatch):
-    monkeypatch.setattr(ipc, "server_name", lambda: "kherveref-test-nobody")
+    monkeypatch.setenv("KHERVEREF_IPC_NAME", "kherveref-test-nobody")
     assert not ipc.send_to_running({"cmd": "raise"}, timeout_ms=100)
 
 

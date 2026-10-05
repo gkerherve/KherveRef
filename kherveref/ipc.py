@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import getpass
 import json
+import os
 import re
 
 from PySide6.QtCore import QObject, Signal
@@ -22,6 +23,8 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 
 def server_name() -> str:
+    if os.environ.get("KHERVEREF_IPC_NAME"):    # tests
+        return os.environ["KHERVEREF_IPC_NAME"]
     user = re.sub(r"[^A-Za-z0-9_]", "_", getpass.getuser() or "user")
     return f"kherveref-{user}"
 
@@ -47,6 +50,9 @@ def send_to_running(request: dict, timeout_ms: int = 800) -> bool:
     sock.write((json.dumps(request or {"cmd": "raise"}) + "\n").encode())
     sock.flush()
     sock.waitForBytesWritten(timeout_ms)
+    # Hang up only once the window has the request: closing straight
+    # away can lose it (Windows named pipes).
+    sock.waitForReadyRead(5000)
     sock.disconnectFromServer()
     return True
 
@@ -89,9 +95,14 @@ class Server(QObject):
             line = bytes(buf).partition(b"\n")[0]
             buf.clear()
             try:
-                self.request.emit(json.loads(line.decode()))
+                req = json.loads(line.decode())
             except ValueError:
-                pass
+                req = None
+            if sock.state() == QLocalSocket.ConnectedState:
+                sock.write(b"ok\n")
+                sock.flush()
+            if req is not None:
+                self.request.emit(req)
 
     def _dropped(self):
         sock = self.sender()
