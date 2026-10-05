@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import os
 import queue
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QPixmap
 
 from .library import Library
@@ -58,14 +59,25 @@ def render(pdf: Path, out: Path, width: int = WIDTH) -> bool:
         return False
 
 
-class _Worker(QThread):
-    done = Signal(str, str)         # key, png path
+class _Worker(QObject):
+    """One daemon thread rendering queued thumbnails in turn. A plain
+    thread rather than a QThread: it must never keep the app from
+    exiting, and Qt aborts on a QThread still running at exit."""
+    done = Signal(str, str)         # key, png path (delivered queued)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.jobs: "queue.Queue[tuple[str, Path, Path] | None]" = queue.Queue()
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name="kherveref-thumbnails")
 
-    def run(self):
+    def start(self):
+        self._thread.start()
+
+    def wait(self, ms: int):
+        self._thread.join(ms / 1000)
+
+    def _run(self):
         while True:
             job = self.jobs.get()
             if job is None:

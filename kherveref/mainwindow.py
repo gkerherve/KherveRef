@@ -150,7 +150,8 @@ class MainWindow(QMainWindow):
         self._status = QLabel()
         self.statusBar().addPermanentWidget(self._status)
         self._apply_theme_qss()
-        self._set_view(QSettings(*SETTINGS).value("view_mode", "list"))
+        self._set_view(QSettings(*SETTINGS).value("view_mode", "list"),
+                       remember=False)
         self._refresh()
 
     # ------------------------------------------------------------------ #
@@ -797,11 +798,12 @@ class MainWindow(QMainWindow):
             return None
         return self._model.entry(self._proxy.mapToSource(proxy_index).row())
 
-    def _set_view(self, mode: str) -> None:
+    def _set_view(self, mode: str, remember: bool = True) -> None:
         covers = mode == "covers"
         self._views.setCurrentIndex(1 if covers else 0)
         (self.act_view_covers if covers else self.act_view_list).setChecked(True)
-        QSettings(*SETTINGS).setValue("view_mode", "covers" if covers else "list")
+        if remember:
+            QSettings(*SETTINGS).setValue("view_mode", "covers" if covers else "list")
 
     def _thumbnail_ready(self, key: str) -> None:
         self._covers.viewport().update()
