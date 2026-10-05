@@ -75,3 +75,34 @@ def test_push_and_pull_through_bare_remote(lib, tmp_path):
     ok, msg = git_backend.pull(lib.root)
     assert ok, msg
     assert (lib.entries_dir / "doe2021.json").exists()
+
+
+def test_undo_and_redo_touch_only_the_change(lib):
+    git_backend.commit_all(lib.root, "Create")
+    before = git_backend.head_tree(lib.root)
+    pdf = lib.files_dir / "a.pdf"
+    pdf.write_bytes(b"%PDF one")
+    (lib.entries_dir / "a.json").write_text("{}\n")
+    git_backend.commit_all(lib.root, "Import a")
+    after = git_backend.head_tree(lib.root)
+    paths = git_backend.change_paths(lib.root, before, after)
+    assert sorted(paths) == [".kherveref/references/a.json", "PDFs/a.pdf"]
+
+    notes = lib.root / "my notes.txt"      # a file the user added by hand
+    notes.write_text("keep me")
+    assert git_backend.can_apply_change(lib.root, after, paths)
+    assert git_backend.apply_change(lib.root, after, before, "Undo: Import a")
+    assert not pdf.exists() and not (lib.entries_dir / "a.json").exists()
+    assert notes.read_text() == "keep me"
+    undone = git_backend.head_tree(lib.root)
+    assert git_backend.can_apply_change(lib.root, before, paths)
+    assert git_backend.apply_change(lib.root, before, after, "Redo: Import a")
+    assert pdf.read_bytes() == b"%PDF one" and notes.read_text() == "keep me"
+    assert [h[3] for h in git_backend.history(lib.root)][:3] == [
+        "Redo: Import a", "Undo: Import a", "Import a"]
+
+    # Changed again since: undoing the import would lose that change.
+    pdf.write_bytes(b"%PDF edited")
+    git_backend.commit_all(lib.root, "Edit a")
+    assert not git_backend.can_apply_change(lib.root, after, paths)
+    assert undone

@@ -8,7 +8,7 @@ Same look and themes as the rest of the Kherve suite.
 
 ## Adding references
 
-- **Drop PDFs** (or a whole folder) onto the window, or use *Add PDFs…* /
+- **Drop PDFs or whole folders** anywhere on the window, or use *Add PDFs…* /
   *Import folder…*. KherveRef reads each PDF's DOI, arXiv id or ISBN and
   fetches the full details online (doi.org / Crossref, arXiv,
   OpenLibrary). Without an identifier it searches Crossref by the title
@@ -32,6 +32,18 @@ Same look and themes as the rest of the Kherve suite.
   | CSL-JSON `.json` | Zotero, Paperpile, others | — |
 - Drag references onto a collection to file them; drag them into a text
   editor to get `\cite{key}`.
+
+## Undo, preview, delete
+
+- Importing a folder first lists every subfolder and file it would add;
+  untick what you don't want, then *Import*.
+- *Edit ▸ Undo / Redo* (Ctrl+Z / Ctrl+Shift+Z) reverses any change made
+  in the window — a whole import, an edit, a delete, a collection
+  change — PDFs included. Undo is recorded as a new change in the
+  library's history, never by rewriting it, and is refused when the
+  references involved were changed since from elsewhere (Claude, a sync).
+- Delete a reference with the toolbar's *Delete*, the Delete key, or
+  right-click ▸ Delete (right-click selects the reference under the mouse).
 
 ## Seeing your papers
 

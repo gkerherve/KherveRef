@@ -96,6 +96,69 @@ def commit_all(root: Path, message: str) -> Optional[str]:
         return None
 
 
+def head_tree(root: Path) -> Optional[str]:
+    """Id of the tree HEAD points at: a snapshot of the whole library."""
+    repo = _repo(root)
+    if repo is None or repo.head_is_unborn:
+        return None
+    try:
+        return str(repo.head.peel(pygit2.Tree).id)
+    except Exception:
+        return None
+
+
+def _entry_id(tree, path: str) -> Optional[str]:
+    try:
+        return str(tree[path].id)
+    except KeyError:
+        return None
+
+
+def change_paths(root: Path, from_tree: str, to_tree: str) -> list[str]:
+    """Files that differ between two snapshots."""
+    repo = _repo(root)
+    if repo is None:
+        return []
+    diff = repo.get(from_tree).diff_to_tree(repo.get(to_tree))
+    return [d.new_file.path if d.status_char() != "D" else d.old_file.path
+            for d in diff.deltas]
+
+
+def can_apply_change(root: Path, expected_tree: str, paths: list[str]) -> bool:
+    """True when every file in *paths* is, at HEAD, exactly as it was in
+    snapshot *expected_tree* — i.e. nothing touched them since."""
+    repo = _repo(root)
+    if repo is None or repo.head_is_unborn:
+        return False
+    head = repo.head.peel(pygit2.Tree)
+    expected = repo.get(expected_tree)
+    return all(_entry_id(head, p) == _entry_id(expected, p) for p in paths)
+
+
+def apply_change(root: Path, from_tree: str, to_tree: str,
+                 message: str) -> Optional[str]:
+    """Replay the change between two snapshots onto the library's files
+    and commit it as a new change. Undo is apply_change(after, before);
+    Redo is apply_change(before, after). History is never rewritten, and
+    files the change did not touch are left alone."""
+    repo = _repo(root)
+    if repo is None:
+        return None
+    try:
+        workdir = Path(repo.workdir)
+        diff = repo.get(from_tree).diff_to_tree(repo.get(to_tree))
+        for delta in diff.deltas:
+            if delta.status_char() == "D":
+                (workdir / delta.old_file.path).unlink(missing_ok=True)
+            else:
+                dest = workdir / delta.new_file.path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(repo[delta.new_file.id].data)
+    except Exception:
+        return None
+    return commit_all(root, message)
+
+
 def history(root: Path, limit: int = 100
             ) -> list[tuple[str, str, int, str]]:
     """(sha7, author, unix_time, subject) tuples, newest first."""

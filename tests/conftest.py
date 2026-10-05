@@ -72,6 +72,12 @@ def win(qapp, tmp_path, monkeypatch, git_identity):
     from kherveref.mainwindow import MainWindow
     monkeypatch.setattr(fetch, "http_get", FakeNet())
     monkeypatch.setattr(jobs.SummaryDialog, "exec", lambda self: 0)
+    from PySide6.QtWidgets import QDialog
+
+    from kherveref import import_preview
+    # The folder preview says yes to everything it lists.
+    monkeypatch.setattr(import_preview.ImportPreviewDialog, "exec",
+                        lambda self: QDialog.Accepted)
     monkeypatch.setattr(QMessageBox, "question",
                         staticmethod(lambda *a, **k: QMessageBox.Yes))
     lib = library.create_library(tmp_path / "lib", "Thesis refs")

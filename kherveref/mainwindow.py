@@ -6,7 +6,8 @@ import datetime
 import json
 from pathlib import Path
 
-from PySide6.QtCore import (QFileSystemWatcher, QItemSelectionModel, QSettings,
+from PySide6.QtCore import (QEvent, QFileSystemWatcher, QItemSelectionModel,
+                            QSettings,
                             QSize, Qt, QThread, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices,
                            QIcon, QKeySequence)
@@ -132,6 +133,10 @@ class MainWindow(QMainWindow):
         self._job: QThread | None = None
         self._progress: QProgressDialog | None = None
         self._scope = ALL
+        # Undo / Redo: (snapshot before, snapshot after, description) of
+        # each change made in this window; see git_backend.apply_change.
+        self._undo: list[tuple[str, str, str]] = []
+        self._redo: list[tuple[str, str, str]] = []
 
         # Changes made outside this window (the MCP server, a git pull in
         # a terminal) are picked up from the library folder.
@@ -149,6 +154,7 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._status = QLabel()
         self.statusBar().addPermanentWidget(self._status)
+        QApplication.instance().installEventFilter(self)
         self._apply_theme_qss()
         self._set_view(QSettings(*SETTINGS).value("view_mode", "list"),
                        remember=False)
@@ -215,7 +221,7 @@ class MainWindow(QMainWindow):
         self._table.doubleClicked.connect(lambda _ix: self._open_first_file())
         self._table.setContextMenuPolicy(Qt.CustomContextMenu)
         self._table.customContextMenuRequested.connect(
-            lambda pos: self._table_menu(self._table.viewport().mapToGlobal(pos)))
+            lambda pos: self._context_menu(self._table, pos))
 
         self._covers = CoversView(self._thumbs, self._entry_at)
         self._covers.setModel(self._proxy)
@@ -223,7 +229,7 @@ class MainWindow(QMainWindow):
         self._covers.doubleClicked.connect(lambda _ix: self._open_first_file())
         self._covers.setContextMenuPolicy(Qt.CustomContextMenu)
         self._covers.customContextMenuRequested.connect(
-            lambda pos: self._table_menu(self._covers.viewport().mapToGlobal(pos)))
+            lambda pos: self._context_menu(self._covers, pos))
         self._views = QStackedWidget()
         self._views.addWidget(self._table)
         self._views.addWidget(self._covers)
@@ -297,6 +303,8 @@ class MainWindow(QMainWindow):
                            QKeySequence.Paste)
         self.act_delete = A("&Delete reference…", self._delete_selected, "delete",
                             QKeySequence.Delete)
+        self.act_undo = A("&Undo", self._undo_last, "revert", QKeySequence.Undo)
+        self.act_redo = A("&Redo", self._redo_last, "redo", QKeySequence.Redo)
         self.act_find = A("&Find", lambda: (self._search.setFocus(),
                                             self._search.selectAll()),
                           "find", QKeySequence.Find)
@@ -375,6 +383,8 @@ class MainWindow(QMainWindow):
         m.addAction(self.act_quit)
 
         m = mb.addMenu("&Edit")
+        m.addActions([self.act_undo, self.act_redo])
+        m.addSeparator()
         m.addActions([self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
                       self.act_paste])
         m.addSeparator()
@@ -419,6 +429,9 @@ class MainWindow(QMainWindow):
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         for a in (self.act_add_pdfs, self.act_import_folder, self.act_add_id):
             tb.addAction(a)
+        tb.addSeparator()
+        tb.addAction(self.act_delete)
+        tb.addAction(self.act_undo)
         tb.addSeparator()
         tb.addAction(self.act_export_biblatex)
         tb.addSeparator()
@@ -478,6 +491,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Open library", str(e))
             return False
         self.library = lib
+        self._undo.clear()
+        self._redo.clear()
         self._thumbs.set_library(lib)
         self._remember(lib.root)
         self._scope = ALL
@@ -502,6 +517,8 @@ class MainWindow(QMainWindow):
         self._flush_editor()
         self._watch(None)
         self.library = None
+        self._undo.clear()
+        self._redo.clear()
         self._thumbs.set_library(None)
         self.entries = {}
         self.collections = []
@@ -575,9 +592,59 @@ class MainWindow(QMainWindow):
                                      4000)
 
     def _commit(self, message: str) -> None:
+        before = git_backend.head_tree(self.library.root)
         store.write_library_bib(self.library, self.entries.values())
         git_backend.commit_all(self.library.root, message)
+        after = git_backend.head_tree(self.library.root)
+        if before and after and before != after:
+            self._undo.append((before, after, message))
+            self._redo.clear()
+        self._update_undo_actions()
         self._update_status()
+
+    # ----- undo / redo -----
+
+    def _update_undo_actions(self) -> None:
+        for act, stack, word in ((self.act_undo, self._undo, "Undo"),
+                                 (self.act_redo, self._redo, "Redo")):
+            act.setEnabled(self.library is not None and bool(stack))
+            what = stack[-1][2] if stack else ""
+            act.setText(f"&{word} {what[:50]}" if what else f"&{word}")
+            act.setToolTip(f"{word}: {what}" if what else word)
+
+    def _undo_last(self) -> None:
+        self._replay(self._undo, self._redo, "Undo")
+
+    def _redo_last(self) -> None:
+        self._replay(self._redo, self._undo, "Redo")
+
+    def _replay(self, source, target, word: str) -> None:
+        if self.library is None or not source:
+            return
+        self._flush_editor()
+        before, after, what = source[-1]
+        # Undo goes after -> before; Redo before -> after.
+        start, end = (after, before) if word == "Undo" else (before, after)
+        root = self.library.root
+        paths = git_backend.change_paths(root, start, end)
+        if not git_backend.can_apply_change(root, start, paths):
+            source.clear()
+            self._update_undo_actions()
+            QMessageBox.information(
+                self, word,
+                f"“{what}” can't be {word.lower()}ne any more: the "
+                "references it touched were changed since (from another "
+                "window, Claude, or a sync). Library ▸ History lists every "
+                "change.")
+            return
+        source.pop()
+        if git_backend.apply_change(root, start, end, f"{word}: {what}") is None:
+            QMessageBox.warning(self, word, f"Could not {word.lower()} “{what}”.")
+            return
+        target.append((before, after, what))
+        self._reload([])
+        self._update_undo_actions()
+        self.statusBar().showMessage(f"{word}: {what}", 5000)
 
     def _flush_editor(self) -> None:
         """Save pending edits before the editor shows something else."""
@@ -815,6 +882,16 @@ class MainWindow(QMainWindow):
         self._proxy.set_search(text)
         self._update_status()
 
+    def _context_menu(self, view, pos) -> None:
+        """Right-click acts on the reference under the mouse, selecting
+        it first unless it is already part of the selection."""
+        ix = view.indexAt(pos)
+        if ix.isValid() and not view.selectionModel().isRowSelected(ix.row()):
+            view.selectionModel().select(
+                ix, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+            view.selectionModel().setCurrentIndex(ix, QItemSelectionModel.NoUpdate)
+        self._table_menu(view.viewport().mapToGlobal(pos))
+
     def _table_menu(self, global_pos) -> None:
         if not self.selected_keys():
             return
@@ -923,9 +1000,18 @@ class MainWindow(QMainWindow):
         elif md.hasText():
             self._import_text(md.text())
 
-    def import_paths(self, paths: list[Path], collection: str = "") -> None:
+    def import_paths(self, paths: list[Path], collection: str = "",
+                     preview: bool = True) -> None:
         if self.library is None or not paths:
             return
+        from .import_preview import ImportPreviewDialog, needs_preview
+        if preview and needs_preview(paths):
+            dlg = ImportPreviewDialog(paths, self)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            paths = dlg.selected_files()
+            if not paths:
+                return
         self._start_import(ImportJob(self.library, paths=paths,
                                      collection=collection))
 
@@ -992,6 +1078,25 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Nothing to import", 4000)
 
     # ----- drag & drop onto the window -----
+
+    def eventFilter(self, obj, ev):  # noqa: N802 — Qt override
+        """Files and folders dropped anywhere in the window are imported —
+        not pasted as a path into whichever text field is under them.
+        Only the collection tree handles its own drops."""
+        if ev.type() not in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
+            return False
+        if self.library is None or not isinstance(obj, QWidget) or \
+                not (obj is self or self.isAncestorOf(obj)) or \
+                obj is self._tree or self._tree.isAncestorOf(obj):
+            return False
+        md = ev.mimeData()
+        if md.hasFormat(KEYS_MIME) or not any(u.isLocalFile() for u in md.urls()):
+            return False
+        if ev.type() == QEvent.Drop:
+            self.dropEvent(ev)
+        else:
+            ev.acceptProposedAction()
+        return True
 
     def dragEnterEvent(self, ev):
         md = ev.mimeData()
@@ -1318,6 +1423,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _refresh(self) -> None:
+        self._update_undo_actions()
         lib = self.library
         for a in self._library_actions:
             a.setEnabled(lib is not None)
@@ -1470,6 +1576,7 @@ class MainWindow(QMainWindow):
             "© 2026 Gwilherm Kerherve — GPL-3.0")
 
     def closeEvent(self, event) -> None:
+        QApplication.instance().removeEventFilter(self)
         self._flush_editor()
         self._thumbs.stop()
         if self._job is not None:
