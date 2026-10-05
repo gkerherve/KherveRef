@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QScrollArea,
@@ -58,6 +59,16 @@ def _names_text(people: list[Person]) -> str:
                      for p in people)
 
 
+class _Cover(QLabel):
+    """The PDF's front page above the details; a click opens the PDF."""
+    clicked = Signal()
+
+    def mousePressEvent(self, ev):  # noqa: N802 — Qt override
+        if ev.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(ev)
+
+
 class EntryEditor(QWidget):
     """Emits `save_requested` with the edited entry; the main window
     owns saving and committing."""
@@ -83,7 +94,19 @@ class EntryEditor(QWidget):
         self._empty.setMargin(24)
 
         form_host = QWidget()
-        self._form = QFormLayout(form_host)
+        host_lay = QVBoxLayout(form_host)
+        self._cover = _Cover()
+        self._cover.setAlignment(Qt.AlignHCenter)
+        self._cover.setCursor(Qt.PointingHandCursor)
+        self._cover.setToolTip("Open the PDF")
+        self._cover.clicked.connect(
+            lambda: self._entry and self._entry.files and
+            self.open_file_requested.emit(self._entry, 0))
+        self._cover.hide()
+        host_lay.addWidget(self._cover)
+        self._form = QFormLayout()
+        host_lay.addLayout(self._form)
+        host_lay.addStretch(1)
         self._form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         self._form.setLabelAlignment(Qt.AlignRight)
 
@@ -219,6 +242,8 @@ class EntryEditor(QWidget):
         self._entry = e
         self._empty.setVisible(e is None)
         self._body.setVisible(e is not None)
+        if e is None or not e.files:
+            self._cover.hide()
         if e is None:
             self._set_clean()
             return
@@ -244,6 +269,17 @@ class EntryEditor(QWidget):
         self._loading = False
         self._update_visible_rows()
         self._set_clean()
+
+    def set_cover(self, pm: QPixmap | None) -> None:
+        if pm is None or pm.isNull():
+            self._cover.hide()
+            return
+        ratio = self.devicePixelRatioF()
+        scaled = pm.scaled(int(230 * ratio), int(320 * ratio), Qt.KeepAspectRatio,
+                           Qt.SmoothTransformation)
+        scaled.setDevicePixelRatio(ratio)
+        self._cover.setPixmap(scaled)
+        self._cover.show()
 
     def _type_changed(self, *_):
         self._update_visible_rows()

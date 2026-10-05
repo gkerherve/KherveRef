@@ -7,27 +7,6 @@ from kherveref.table_model import ALL, REVIEW
 from helpers import FakeNet, make_pdf
 
 
-@pytest.fixture
-def git_identity(monkeypatch):
-    for k, v in (("GIT_AUTHOR_NAME", "T"), ("GIT_COMMITTER_NAME", "T"),
-                 ("GIT_AUTHOR_EMAIL", "t@x"), ("GIT_COMMITTER_EMAIL", "t@x")):
-        monkeypatch.setenv(k, v)
-
-
-@pytest.fixture
-def win(qapp, tmp_path, monkeypatch, git_identity):
-    monkeypatch.setattr(fetch, "http_get", FakeNet())
-    monkeypatch.setattr(jobs.SummaryDialog, "exec", lambda self: 0)
-    monkeypatch.setattr(QMessageBox, "question",
-                        staticmethod(lambda *a, **k: QMessageBox.Yes))
-    lib = library.create_library(tmp_path / "lib", "Thesis refs")
-    git_backend.commit_all(lib.root, "Create")
-    w = MainWindow()
-    w.open_library(lib.root)
-    yield w
-    w.close()
-
-
 def wait_for_job(w):
     while w._job is not None:
         QApplication.processEvents()

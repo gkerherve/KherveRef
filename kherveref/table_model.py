@@ -2,6 +2,8 @@
 that filters by collection and search text."""
 from __future__ import annotations
 
+import html
+
 from PySide6.QtCore import (QAbstractTableModel, QMimeData, QModelIndex,
                             QSortFilterProxyModel, Qt)
 
@@ -18,9 +20,11 @@ ALL, UNFILED, REVIEW = "all", "unfiled", "review"
 
 
 class RefTableModel(QAbstractTableModel):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, thumb_path=None):
         super().__init__(parent)
         self._rows: list[Entry] = []
+        # Entry -> rendered front-page PNG (or None), for hover previews.
+        self._thumb_path = thumb_path or (lambda e: None)
 
     def set_entries(self, entries) -> None:
         self.beginResetModel()
@@ -77,8 +81,13 @@ class RefTableModel(QAbstractTableModel):
                 if e.needs_review:
                     return "Needs checking: the details were guessed"
                 return "PDF attached" if e.files else None
-            if col == COL_TITLE:
-                return e.title
+            if col in (COL_TITLE, COL_KEY, COL_AUTHORS):
+                png = self._thumb_path(e)
+                head = (f"<b>{html.escape(e.title)}</b><br>"
+                        f"{html.escape(e.author_text(3))} {e.year}")
+                if png is not None:
+                    return (f"<img src='{png.as_uri()}' width='180'><br>" + head)
+                return head if col == COL_TITLE else None
             if col == COL_AUTHORS:
                 return "; ".join(p.display() for p in e.authors or e.editors)
         if role == Qt.UserRole:     # sort key

@@ -9,6 +9,7 @@ guess is the largest text near the top of page 1.
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,6 +23,11 @@ _HEADER_NOISE = re.compile(
     r"www\.|http|vol\.|volume|issue|pages?|received|accepted|published|"
     r"copyright|©|licen[sc]e|doi|issn|arxiv|preprint|article|research paper)",
     re.I)
+
+
+# PyMuPDF is not thread-safe, and imports, annotation reading and
+# thumbnails run on different threads: every use takes this lock.
+PDF_LOCK = threading.RLock()
 
 
 @dataclass
@@ -83,6 +89,11 @@ def _largest_text(page) -> str:
 
 
 def inspect_pdf(path: Path, max_pages: int = 2) -> PdfInfo:
+    with PDF_LOCK:
+        return _inspect_pdf(path, max_pages)
+
+
+def _inspect_pdf(path: Path, max_pages: int) -> PdfInfo:
     import pymupdf
     info = PdfInfo()
     try:
@@ -144,6 +155,11 @@ _ANNOT_KINDS = {"Highlight": "highlight", "Underline": "underline",
 def extract_annotations(path: Path) -> list[tuple[int, str, str, str]]:
     """(page number, kind, marked text, comment) for each highlight and
     note in the PDF, in reading order."""
+    with PDF_LOCK:
+        return _extract_annotations(path)
+
+
+def _extract_annotations(path: Path) -> list[tuple[int, str, str, str]]:
     import pymupdf
     out = []
     try:

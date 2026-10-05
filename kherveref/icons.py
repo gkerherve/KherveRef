@@ -1,13 +1,15 @@
 """Runtime icon factory.
 
 No PNG/SVG files are shipped for UI chrome: every icon is a qtawesome
-glyph (Material Design Icons, with Font Awesome fallbacks), drawn in the
-one monochrome colour of the active theme — the same look as KhervePDF
-and KherveCAD.
+glyph. The set is Phosphor (thin, rounded, one stroke weight — the look
+of current desktop apps), drawn in one quiet colour taken from the
+theme; only the main "add" actions use the theme's accent colour.
+Material Design glyphs are the fallback for older qtawesome builds.
 
   * icon(name)            -> QIcon in the theme's icon colour
   * icon(name, color=...) -> QIcon with an explicit override
   * set_icon_color(c)     -> retarget new icons to a theme's colour
+  * set_accent_color(c)   -> the colour of the ACCENTED actions
 """
 from __future__ import annotations
 
@@ -15,6 +17,50 @@ from PySide6.QtGui import QColor, QIcon
 
 import qtawesome as qta
 
+_PHOSPHOR: dict[str, str] = {
+    "new_library":  "ph.books",
+    "open_library": "ph.folder-open",
+    "close":        "ph.x",
+    "recent":       "ph.clock-counter-clockwise",
+    "add_ref":      "ph.plus",
+    "add_doi":      "ph.barcode",
+    "import_bib":   "ph.file-arrow-down",
+    "export_bib":   "ph.export",
+    "delete":       "ph.trash",
+    "find":         "ph.magnifying-glass",
+    "pdf":          "ph.file-pdf",
+    "add_pdf":      "ph.file-plus",
+    "add_folder":   "ph.folder-plus",
+    "open_pdf":     "ph.book-open",
+    "folder":       "ph.folder-open",
+    "copy":         "ph.copy",
+    "lookup":       "ph.globe",
+    "review":       "ph.warning-circle",
+    "rename":       "ph.pencil-simple",
+    "attach":       "ph.paperclip",
+    "save":         "ph.floppy-disk",
+    "revert":       "ph.arrow-counter-clockwise",
+    "collection_new": "ph.folder-simple-plus",
+    "notes":        "ph.note",
+    "zotero":       "ph.download-simple",
+    "all_refs":     "ph.books",
+    "unfiled":      "ph.tray",
+    "collection":   "ph.folder",
+    "commit":       "ph.git-commit",
+    "history":      "ph.clock-counter-clockwise",
+    "remote":       "ph.cloud",
+    "push":         "ph.cloud-arrow-up",
+    "pull":         "ph.cloud-arrow-down",
+    "about":        "ph.info",
+    "claude":       "ph.sparkle",
+    "view_list":    "ph.list-bullets",
+    "view_covers":  "ph.squares-four",
+}
+
+# The few actions that matter most wear the accent colour.
+ACCENTED = {"add_pdf", "add_folder", "add_doi"}
+
+# Material Design: the fallback where qtawesome predates Phosphor (< 1.3).
 _GLYPHS: dict[str, str] = {
     # Library
     "new_library":  "mdi6.bookshelf",
@@ -60,6 +106,8 @@ _GLYPHS: dict[str, str] = {
     # Help
     "about":        "mdi6.information-outline",
     "claude":       "mdi6.robot-outline",
+    "view_list":    "mdi6.format-list-bulleted",
+    "view_covers":  "mdi6.view-grid-outline",
 }
 
 # Older qtawesome builds lack some mdi6 glyphs.
@@ -102,6 +150,7 @@ _FALLBACK_GLYPHS: dict[str, str] = {
 }
 
 DEFAULT_COLOR = "#444444"
+ACCENT_COLOR = "#1a6dd8"
 
 # cacheKey -> (name, explicit colour), so a live theme switch can find
 # and rebuild every icon (see MainWindow._retint_icons).
@@ -111,6 +160,11 @@ _ICON_SPECS: dict[int, tuple[str, object]] = {}
 def set_icon_color(color: QColor | str) -> None:
     global DEFAULT_COLOR
     DEFAULT_COLOR = QColor(color).name()
+
+
+def set_accent_color(color: QColor | str) -> None:
+    global ACCENT_COLOR
+    ACCENT_COLOR = QColor(color).name()
 
 
 def icon_spec(ic: QIcon):
@@ -123,10 +177,11 @@ def forget_icon_specs() -> None:
 
 
 def icon(name: str, color: QColor | str | None = None) -> QIcon:
-    c = color if color is not None else DEFAULT_COLOR
+    c = color if color is not None else (
+        ACCENT_COLOR if name in ACCENTED else DEFAULT_COLOR)
     # An unknown glyph name must never take a toolbar down with it.
-    for spec in (_GLYPHS.get(name), _FALLBACK_GLYPHS.get(name),
-                 "fa5s.question"):
+    for spec in (_PHOSPHOR.get(name), _GLYPHS.get(name),
+                 _FALLBACK_GLYPHS.get(name), "fa5s.question"):
         if not spec:
             continue
         try:

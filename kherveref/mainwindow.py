@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from . import (bibtex, csl, git_backend, icons, importer, library, links,
                state, store, themes)
 from . import version_string
+from .covers import CoversView
 from .editor import EntryEditor
 from .icons import icon
 from .jobs import ImportJob, LookupJob, SummaryDialog
@@ -28,6 +29,7 @@ from .keys import is_valid_key
 from .model import Entry
 from .table_model import (ALL, COL_KEY, COL_STATUS, COL_TITLE, KEYS_MIME,
                           REVIEW, UNFILED, RefFilterProxy, RefTableModel)
+from .thumbnails import Thumbnails
 
 SETTINGS = ("kherve", "KherveRef")
 MAX_RECENT = 8
@@ -120,7 +122,10 @@ class MainWindow(QMainWindow):
         self._theme_name = theme_name
         self._theme = themes.THEMES.get(theme_name, themes.THEMES["Light"])
         icons.set_icon_color(themes.icon_color(self._theme))
+        icons.set_accent_color(self._theme["accent"])
         self.library: library.Library | None = None
+        self._thumbs = Thumbnails(self)
+        self._thumbs.ready.connect(self._thumbnail_ready)
         self.entries: dict[str, Entry] = {}
         self.collections: list[store.Collection] = []
         self._git_job: _GitJob | None = None
@@ -145,6 +150,7 @@ class MainWindow(QMainWindow):
         self._status = QLabel()
         self.statusBar().addPermanentWidget(self._status)
         self._apply_theme_qss()
+        self._set_view(QSettings(*SETTINGS).value("view_mode", "list"))
         self._refresh()
 
     # ------------------------------------------------------------------ #
@@ -182,7 +188,7 @@ class MainWindow(QMainWindow):
             lambda paths, cid: self.import_paths([Path(p) for p in paths], cid))
         self._tree.itemChanged.connect(self._collection_renamed)
 
-        self._model = RefTableModel(self)
+        self._model = RefTableModel(self, thumb_path=self._thumbs.path)
         self._proxy = RefFilterProxy(self)
         self._proxy.setSourceModel(self._model)
         self._table = QTableView()
@@ -207,7 +213,19 @@ class MainWindow(QMainWindow):
         self._table.selectionModel().selectionChanged.connect(self._selection_changed)
         self._table.doubleClicked.connect(lambda _ix: self._open_first_file())
         self._table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self._table.customContextMenuRequested.connect(self._table_menu)
+        self._table.customContextMenuRequested.connect(
+            lambda pos: self._table_menu(self._table.viewport().mapToGlobal(pos)))
+
+        self._covers = CoversView(self._thumbs, self._entry_at)
+        self._covers.setModel(self._proxy)
+        self._covers.setSelectionModel(self._table.selectionModel())
+        self._covers.doubleClicked.connect(lambda _ix: self._open_first_file())
+        self._covers.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._covers.customContextMenuRequested.connect(
+            lambda pos: self._table_menu(self._covers.viewport().mapToGlobal(pos)))
+        self._views = QStackedWidget()
+        self._views.addWidget(self._table)
+        self._views.addWidget(self._covers)
 
         self._editor = EntryEditor()
         self._editor.setMinimumWidth(340)
@@ -219,7 +237,7 @@ class MainWindow(QMainWindow):
 
         split = QSplitter()
         split.addWidget(self._tree)
-        split.addWidget(self._table)
+        split.addWidget(self._views)
         split.addWidget(self._editor)
         split.setStretchFactor(1, 1)
         split.setSizes([210, 760, 390])
@@ -307,6 +325,16 @@ class MainWindow(QMainWindow):
             lambda on: QSettings(*SETTINGS).setValue(links.USE_KEY, on))
         self.act_locate_pdf = A("Locate KhervePDF…", self._locate_khervepdf)
 
+        self.act_view_list = A("&List", lambda: self._set_view("list"), "view_list",
+                               "Ctrl+1", "References as a list")
+        self.act_view_covers = A("&Covers", lambda: self._set_view("covers"),
+                                 "view_covers", "Ctrl+2",
+                                 "References as their PDFs' front pages")
+        view_group = QActionGroup(self)
+        for a in (self.act_view_list, self.act_view_covers):
+            a.setCheckable(True)
+            view_group.addAction(a)
+
         self.act_history = A("&History…", self._show_history, "history")
         self.act_remote = A("Set &remote…", self._set_remote, "remote")
         self.act_pull = A("&Pull", lambda: self._run_git(git_backend.pull, "Pull"),
@@ -360,6 +388,8 @@ class MainWindow(QMainWindow):
         m.addActions([self.act_online, self.act_use_khervepdf, self.act_locate_pdf])
 
         m = mb.addMenu("&View")
+        m.addActions([self.act_view_list, self.act_view_covers])
+        m.addSeparator()
         m_theme = m.addMenu("&Theme")
         group = QActionGroup(self)
         for name in themes.THEME_NAMES:
@@ -395,6 +425,10 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
+        for a in (self.act_view_list, self.act_view_covers):
+            tb.addAction(a)
+            tb.widgetForAction(a).setToolButtonStyle(Qt.ToolButtonIconOnly)
+        tb.addSeparator()
         self._search = QLineEdit()
         self._search.setPlaceholderText("Search authors, titles, keys, DOIs…")
         self._search.setClearButtonEnabled(True)
@@ -443,6 +477,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Open library", str(e))
             return False
         self.library = lib
+        self._thumbs.set_library(lib)
         self._remember(lib.root)
         self._scope = ALL
         self._watch(lib)
@@ -466,6 +501,7 @@ class MainWindow(QMainWindow):
         self._flush_editor()
         self._watch(None)
         self.library = None
+        self._thumbs.set_library(None)
         self.entries = {}
         self.collections = []
         self._model.set_entries([])
@@ -742,22 +778,42 @@ class MainWindow(QMainWindow):
             first = first or ix
         if first is not None:
             self._table.scrollTo(first)
+            self._covers.scrollTo(first)
             sel.setCurrentIndex(first, QItemSelectionModel.NoUpdate)
 
     def _selection_changed(self, *_):
         self._flush_editor()
         entries = self.selected_entries()
         self._editor.set_entry(entries[0] if len(entries) == 1 else None)
+        if len(entries) == 1:
+            self._editor.set_cover(self._thumbs.pixmap(entries[0]))
         for a in self._selection_actions:
             a.setEnabled(bool(entries))
         self.act_rename_key.setEnabled(len(entries) == 1)
         self._update_status()
 
+    def _entry_at(self, proxy_index) -> Entry | None:
+        if not proxy_index.isValid():
+            return None
+        return self._model.entry(self._proxy.mapToSource(proxy_index).row())
+
+    def _set_view(self, mode: str) -> None:
+        covers = mode == "covers"
+        self._views.setCurrentIndex(1 if covers else 0)
+        (self.act_view_covers if covers else self.act_view_list).setChecked(True)
+        QSettings(*SETTINGS).setValue("view_mode", "covers" if covers else "list")
+
+    def _thumbnail_ready(self, key: str) -> None:
+        self._covers.viewport().update()
+        e = self._editor.entry
+        if e is not None and e.key == key and not self._editor.is_dirty():
+            self._editor.set_cover(self._thumbs.pixmap(e))
+
     def _search_changed(self, text: str) -> None:
         self._proxy.set_search(text)
         self._update_status()
 
-    def _table_menu(self, pos) -> None:
+    def _table_menu(self, global_pos) -> None:
         if not self.selected_keys():
             return
         menu = QMenu(self)
@@ -781,7 +837,7 @@ class MainWindow(QMainWindow):
             exp.addAction(label, lambda d=d: self._export(d, selected_only=True))
         menu.addSeparator()
         menu.addAction(self.act_delete)
-        menu.exec(self._table.viewport().mapToGlobal(pos))
+        menu.exec(global_pos)
 
     # ------------------------------------------------------------------ #
     # Adding references                                                    #
@@ -1292,12 +1348,59 @@ class MainWindow(QMainWindow):
         self._status.setText("  ·  ".join(parts))
 
     def _apply_theme_qss(self) -> None:
-        self._status.setStyleSheet(themes.status_label_stylesheet(self._theme))
+        t = self._theme
+        self._status.setStyleSheet(themes.status_label_stylesheet(t))
+        # Flat, rounded, airy: the look of current desktop apps.
+        self.setStyleSheet(f"""
+            QToolBar#main_toolbar {{
+                background: {t['surface']}; border: none;
+                border-bottom: 1px solid {t['page_border']};
+                padding: 6px 10px; spacing: 4px;
+            }}
+            QToolBar#main_toolbar QToolButton {{
+                border: none; border-radius: 7px; padding: 6px 10px;
+                color: {t['text']};
+            }}
+            QToolBar#main_toolbar QToolButton:hover {{ background: {t['tab_hover']}; }}
+            QToolBar#main_toolbar QToolButton:pressed,
+            QToolBar#main_toolbar QToolButton:checked {{ background: {t['alt_base']}; }}
+            QToolBar#main_toolbar QLineEdit {{
+                border: 1px solid {t['page_border']}; border-radius: 15px;
+                padding: 5px 10px; background: {t['base']}; color: {t['text']};
+            }}
+            QToolBar#main_toolbar QLineEdit:focus {{ border: 1px solid {t['accent']}; }}
+            QTreeWidget, QTableView, QListView {{
+                border: none; background: {t['base']};
+                selection-background-color: {t['highlight']};
+                selection-color: {t['highlight_text']};
+            }}
+            QTreeWidget {{ outline: 0; show-decoration-selected: 0; }}
+            QTreeWidget::item {{
+                padding: 5px 4px; border-radius: 6px; color: {t['text']};
+            }}
+            QTreeWidget::item:hover {{ background: {t['tab_hover']}; }}
+            QTreeWidget::item:selected {{
+                background: {t['highlight']}; color: {t['highlight_text']};
+            }}
+            QTreeWidget::branch:selected {{ background: transparent; }}
+            QTableView {{ gridline-color: transparent; }}
+            QHeaderView::section {{
+                background: {t['base']}; color: {t['text_muted']};
+                border: none; border-bottom: 1px solid {t['page_border']};
+                padding: 6px 6px; font-weight: 600;
+            }}
+            QSplitter::handle {{ background: {t['page_border']}; }}
+            QSplitter::handle:horizontal {{ width: 1px; }}
+        """)
+        if hasattr(self, "_table"):
+            self._table.setShowGrid(False)
+            self._table.verticalHeader().setDefaultSectionSize(30)
 
     def _set_theme(self, name: str) -> None:
         self._theme_name = name
         self._theme = themes.apply_theme(QApplication.instance(), name)
         icons.set_icon_color(themes.icon_color(self._theme))
+        icons.set_accent_color(self._theme["accent"])
         self._apply_theme_qss()
         self._retint_icons()
         QSettings(*SETTINGS).setValue("theme_name", name)
@@ -1353,6 +1456,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._flush_editor()
+        self._thumbs.stop()
         if self._job is not None:
             self._job.cancel()
             self._job.wait(10000)

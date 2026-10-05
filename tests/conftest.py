@@ -51,3 +51,32 @@ import pytest  # noqa: E402
 def qapp():
     from PySide6.QtWidgets import QApplication
     return QApplication.instance() or QApplication([])
+
+
+import pytest as _pytest  # noqa: E402
+
+
+@_pytest.fixture
+def git_identity(monkeypatch):
+    for k, v in (("GIT_AUTHOR_NAME", "T"), ("GIT_COMMITTER_NAME", "T"),
+                 ("GIT_AUTHOR_EMAIL", "t@x"), ("GIT_COMMITTER_EMAIL", "t@x")):
+        monkeypatch.setenv(k, v)
+
+
+@_pytest.fixture
+def win(qapp, tmp_path, monkeypatch, git_identity):
+    from PySide6.QtWidgets import QMessageBox
+
+    from helpers import FakeNet
+    from kherveref import fetch, git_backend, jobs, library
+    from kherveref.mainwindow import MainWindow
+    monkeypatch.setattr(fetch, "http_get", FakeNet())
+    monkeypatch.setattr(jobs.SummaryDialog, "exec", lambda self: 0)
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(lambda *a, **k: QMessageBox.Yes))
+    lib = library.create_library(tmp_path / "lib", "Thesis refs")
+    git_backend.commit_all(lib.root, "Create")
+    w = MainWindow()
+    w.open_library(lib.root)
+    yield w
+    w.close()

@@ -33,6 +33,14 @@ Same look and themes as the rest of the Kherve suite.
 - Drag references onto a collection to file them; drag them into a text
   editor to get `\cite{key}`.
 
+## Seeing your papers
+
+*View ▸ Covers* (Ctrl+2) shows the library as the front pages of its PDFs,
+with title, authors and year; *View ▸ List* (Ctrl+1) is the table. The
+selected reference's front page sits above its details (click it to open
+the PDF), and hovering a title in the list previews it. Thumbnails are
+rendered once in the background and cached in `.kherveref/cache/`.
+
 ## Importing from Zotero
 
 *File ▸ Import from Zotero…* copies every reference of a Zotero library
