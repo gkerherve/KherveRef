@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import (bibtex, cite, csl, git_backend, icons, importer, library, links,
-               state, store, themes, word_sources)
+               state, store, themes, word_addin, word_server, word_sources)
 from . import version_string
 from .covers import CoversView
 from .editor import EntryEditor
@@ -127,6 +127,10 @@ class MainWindow(QMainWindow):
         icons.set_accent_color(self._theme["accent"])
         self.library: library.Library | None = None
         self._thumbs = Thumbnails(self)
+        # What the Word panel sees: replaced (never mutated) on each change,
+        # because the service reads it from its own thread.
+        self._api_snapshot: tuple = (None, {})
+        self._word_server = word_server.start(lambda: self._api_snapshot)
         self._thumbs.ready.connect(self._thumbnail_ready)
         self.entries: dict[str, Entry] = {}
         self.collections: list[store.Collection] = []
@@ -324,6 +328,10 @@ class MainWindow(QMainWindow):
         self.act_word_send = A("Send library to Word &now", self._send_to_word,
                                "word")
         self.act_word_help = A("Using KherveRef with Word…", self._word_help)
+        self.act_word_panel = A("&Install the KherveRef panel in Word",
+                                self._install_word_panel, "word")
+        self.act_word_panel_remove = A("Remove the panel from Word",
+                                       self._remove_word_panel)
         self.act_paste = A("&Paste DOIs / BibTeX", self._paste, None,
                            QKeySequence.Paste)
         self.act_delete = A("&Delete reference…", self._delete_selected, "delete",
@@ -441,6 +449,8 @@ class MainWindow(QMainWindow):
             m_theme.addAction(a)
 
         m = mb.addMenu("&Word")
+        m.addActions([self.act_word_panel, self.act_word_panel_remove])
+        m.addSeparator()
         m.addActions([self.act_word_sync, self.act_word_send])
         m.addSeparator()
         m.addAction(self.act_word_help)
@@ -1282,6 +1292,27 @@ class MainWindow(QMainWindow):
             msg += " — quit and reopen Word to see changes"
         self.statusBar().showMessage(msg, 8000)
 
+    def _install_word_panel(self) -> None:
+        try:
+            where = word_addin.install()
+        except OSError as e:
+            QMessageBox.warning(self, "Word panel", str(e))
+            return
+        running = word_sources.word_running()
+        QMessageBox.information(
+            self, "Word panel installed",
+            ("Quit and reopen Word, then " if running else "Open Word, then ")
+            + "click Cite on the Home tab (or Insert ▸ Add-ins ▸ My Add-ins ▸ "
+            "Developer Add-ins ▸ KherveRef).\n\nThe panel searches the library "
+            "open here, inserts citations, adds a bibliography and renumbers "
+            "everything when you press Refresh. Keep KherveRef open while you "
+            f"cite.\n\n(Registered: {where})")
+
+    def _remove_word_panel(self) -> None:
+        word_addin.uninstall()
+        self.statusBar().showMessage("KherveRef panel removed from Word "
+                                     "(restart Word)", 6000)
+
     def _word_help(self) -> None:
         QMessageBox.information(
             self, "Using KherveRef with Word",
@@ -1559,6 +1590,8 @@ class MainWindow(QMainWindow):
         self._update_status()
 
     def _update_status(self) -> None:
+        self._api_snapshot = ((self.library.name if self.library else None),
+                              dict(self.entries))
         lib = self.library
         if lib is None:
             self._status.setText("")
@@ -1697,6 +1730,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         QApplication.instance().removeEventFilter(self)
+        if self._word_server is not None:
+            self._word_server.stop()
+            self._word_server = None
         self._flush_editor()
         self._thumbs.stop()
         if self._job is not None:

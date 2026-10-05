@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KherveRef</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css">
+</head>
+<body>
+  <header>
+    <strong>KherveRef</strong>
+    <span id="library" class="muted"></span>
+  </header>
+
+  <div id="offline" class="notice" hidden>
+    <b>KherveRef isn't running.</b> Open KherveRef on this computer, then
+    <button id="retry" class="link">try again</button>.
+  </div>
+
+  <main id="main" hidden>
+    <input id="search" type="search" placeholder="Search your library…" autocomplete="off">
+    <ul id="results" aria-label="References"></ul>
+    <div class="row">
+      <button id="cite" class="primary" disabled>Insert citation</button>
+      <span id="selected" class="muted"></span>
+    </div>
+
+    <section>
+      <label for="style">Citation style</label>
+      <select id="style"></select>
+      <div class="row">
+        <button id="bibliography">Insert bibliography</button>
+        <button id="refresh">Refresh all</button>
+      </div>
+      <p id="status" class="muted" role="status"></p>
+    </section>
+  </main>
+  <script src="taskpane.js"></script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- KherveRef panel for Microsoft Word. KherveRef installs this file
+     (Word ▸ Install the KherveRef panel in Word); the panel itself is
+     served from GitHub Pages and talks to KherveRef on this computer. -->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+           xsi:type="TaskPaneApp">
+  <Id>8f4c2a61-3b7e-4d2a-9c55-6e1b0a7d4f20</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Gwilherm Kerherve</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="KherveRef"/>
+  <Description DefaultValue="Cite from your KherveRef library and keep the bibliography up to date."/>
+  <IconUrl DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-80.png"/>
+  <SupportUrl DefaultValue="https://github.com/gkerherve/KherveRef"/>
+  <AppDomains>
+    <AppDomain>https://gkerherve.github.io</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="WordApi" MinVersion="1.1"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://gkerherve.github.io/KherveRef/word/taskpane.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="KR.Title"/>
+            <Description resid="KR.Description"/>
+            <LearnMoreUrl resid="KR.Home"/>
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="KR.Group">
+                <Label resid="KR.Title"/>
+                <Icon>
+                  <bt:Image size="16" resid="KR.Icon16"/>
+                  <bt:Image size="32" resid="KR.Icon32"/>
+                  <bt:Image size="80" resid="KR.Icon80"/>
+                </Icon>
+                <Control xsi:type="Button" id="KR.Open">
+                  <Label resid="KR.Button"/>
+                  <Supertip>
+                    <Title resid="KR.Button"/>
+                    <Description resid="KR.Description"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="KR.Icon16"/>
+                    <bt:Image size="32" resid="KR.Icon32"/>
+                    <bt:Image size="80" resid="KR.Icon80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>KherveRefPane</TaskpaneId>
+                    <SourceLocation resid="KR.Pane"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="KR.Icon16" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-16.png"/>
+        <bt:Image id="KR.Icon32" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-32.png"/>
+        <bt:Image id="KR.Icon80" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="KR.Pane" DefaultValue="https://gkerherve.github.io/KherveRef/word/taskpane.html"/>
+        <bt:Url id="KR.Home" DefaultValue="https://github.com/gkerherve/KherveRef"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="KR.Title" DefaultValue="KherveRef"/>
+        <bt:String id="KR.Button" DefaultValue="Cite"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="KR.Description" DefaultValue="Insert citations from your KherveRef library and keep the bibliography up to date."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

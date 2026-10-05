@@ -41,7 +41,8 @@ a = Analysis(
     [str(ROOT / "KherveRef.py")],
     pathex=[str(ROOT)],
     binaries=binaries,
-    datas=datas + [(str(ROOT / "kherveref" / "styles"), "kherveref/styles")],
+    datas=datas + [(str(ROOT / "kherveref" / "styles"), "kherveref/styles"),
+                   (str(ROOT / "kherveref" / "word_manifest.xml"), "kherveref")],
     hiddenimports=hiddenimports + [
         "kherveref.mcp_server", "kherveref.smoke", "kherveref.zotero",
         "PySide6.QtNetwork", "sqlite3",

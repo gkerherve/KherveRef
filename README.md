@@ -64,6 +64,12 @@ rendered once in the background and cached in `.kherveref/cache/`.
   date* writes the library into Word's master source list, so it appears
   in Word's *References ▸ Insert Citation* and *Bibliography*. Word reads
   that list when it starts. Sources you created in Word are left alone.
+- **The KherveRef panel in Word:** *Word ▸ Install the KherveRef panel in
+  Word*, restart Word, then *Home ▸ Cite*. Search the library, insert
+  citations, add a bibliography; *Refresh all* renumbers and reformats
+  everything in the chosen style. The panel (`docs/word/`, served by
+  GitHub Pages) talks to KherveRef on this computer through a read-only
+  service on `127.0.0.1:23120`, so keep KherveRef open while citing.
 
 ## Importing from Zotero
 
