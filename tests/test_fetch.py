@@ -29,6 +29,9 @@ def test_classify():
     assert fetch.classify("arXiv:2101.00001v3") == ("arxiv", "2101.00001")
     assert fetch.classify("0-306-40615-2") == ("isbn", "0306406152")
     assert fetch.classify("hello") == ("", "")
+    # Ten letters are not a ten-digit ISBN (this used to raise).
+    assert fetch.classify("identifier") == ("", "")
+    assert fetch.classify("not an identifier") == ("", "")
 
 
 def test_lookup_doi(net):

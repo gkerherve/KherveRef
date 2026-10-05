@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KherveRef User Guide</title>
+<style>
+  :root {
+    --bg: #ffffff; --surface: #f6f8fa; --text: #1f2328; --muted: #59636e;
+    --border: #d8dee4; --accent: #00796b; --accent-soft: #e0f2f0; --code: #f0f2f4;
+    --warn-bg: #fff8e6; --warn-border: #f0d48a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15191e; --surface: #1c2228; --text: #e6edf3; --muted: #9aa5b1;
+      --border: #30363d; --accent: #4db6ac; --accent-soft: #16302d; --code: #232a31;
+      --warn-bg: #2d2614; --warn-border: #6b5a22;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto;
+        padding: 28px 16px 28px 20px; border-right: 1px solid var(--border); font-size: 14px; }
+  nav .brand { display: flex; gap: 10px; align-items: center; font-weight: 700; font-size: 17px;
+               margin-bottom: 18px; color: var(--text); text-decoration: none; }
+  nav .brand span { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px;
+                    background: var(--accent); color: #fff; font-size: 12px; }
+  nav ol { list-style: none; padding: 0; margin: 0; }
+  nav li a { display: block; padding: 4px 8px; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  nav li a:hover { background: var(--surface); color: var(--text); }
+  main { padding: 36px 48px 80px; min-width: 0; }
+  h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; }
+  .lead { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 46em; }
+  h2 { font-size: 24px; margin: 52px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  p, li { max-width: 48em; }
+  a { color: var(--accent); }
+  kbd { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 6px; border: 1px solid var(--border);
+        border-bottom-width: 2px; border-radius: 5px; background: var(--surface); white-space: nowrap; }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .menu { font-weight: 600; white-space: nowrap; }
+  figure { margin: 18px 0 24px; }
+  figure img { max-width: 100%; border: 1px solid var(--border); border-radius: 10px;
+               box-shadow: 0 6px 24px rgba(0,0,0,.08); display: block; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; max-width: 52em; margin: 12px 0 20px; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; }
+  .note { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 10px 14px;
+          border-radius: 0 8px 8px 0; margin: 16px 0; max-width: 48em; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-border); padding: 10px 14px; border-radius: 8px;
+          margin: 16px 0; max-width: 48em; }
+  .tree { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface); padding: 14px 16px;
+          border-radius: 8px; border: 1px solid var(--border); max-width: 48em; white-space: pre; overflow-x: auto; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 38px; margin: 10px 0; }
+  .steps > li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px;
+                        border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center;
+                        font-size: 13px; font-weight: 700; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
+    nav ol { columns: 2; }
+    main { padding: 24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav aria-label="Contents">
+  <a class="brand" href="#top"><span>Kref</span> KherveRef Guide</a>
+  <ol>
+    <li><a href="#start">Getting started</a></li>
+    <li><a href="#library">Your library folder</a></li>
+    <li><a href="#adding">Adding references</a></li>
+    <li><a href="#importing">Importing other libraries</a></li>
+    <li><a href="#checking">Needs checking</a></li>
+    <li><a href="#browsing">Browsing &amp; editing</a></li>
+    <li><a href="#collections">Collections</a></li>
+    <li><a href="#undo">Undo, delete, history</a></li>
+    <li><a href="#export">Citing &amp; exporting</a></li>
+    <li><a href="#word">Microsoft Word</a></li>
+    <li><a href="#khervetex">KherveTeX</a></li>
+    <li><a href="#khervepdf">KhervePDF</a></li>
+    <li><a href="#sync">Syncing between computers</a></li>
+    <li><a href="#ai">AI: Claude</a></li>
+    <li><a href="#keys">Keyboard shortcuts</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<main id="top">
+<h1>KherveRef User Guide</h1>
+<p class="lead">KherveRef keeps your papers and books in one library, finds their details for you,
+and puts citations into KherveTeX, Microsoft Word and LaTeX — with every change kept in your
+library's history.</p>
+
+<figure>
+  <img src="img/main-list.png" alt="KherveRef main window in List view: collections on the left, the reference table in the middle, and the selected paper's front page and details on the right" width="1280" height="740">
+  <figcaption>The main window: collections on the left, references in the middle, the selected
+  reference's front page and details on the right.</figcaption>
+</figure>
+
+<h2 id="start">Getting started</h2>
+<ol class="steps">
+  <li><b>Create a library.</b> <span class="menu">File ▸ New library…</span>, give it a name
+    (for example <i>Thesis references</i>) and choose where it goes. KherveRef creates a folder of
+    that name.</li>
+  <li><b>Add papers.</b> Drag PDFs or a whole folder of PDFs onto the window. KherveRef reads each
+    PDF, finds its DOI or arXiv number and fetches the title, authors, journal and year.</li>
+  <li><b>Cite.</b> Drag references into Word or KherveTeX, use the KherveRef panel in Word, or
+    export a <code>.bib</code> file.</li>
+</ol>
+<p>Next time, KherveRef reopens the last library. To open another, use
+<span class="menu">File ▸ Open library…</span> (choose its <code>.kref</code> file) or
+<span class="menu">File ▸ Open recent</span>.</p>
+
+<h2 id="library">Your library folder</h2>
+<p>A library is an ordinary folder. Inside you only see three things:</p>
+<div class="tree">Thesis references/
+  Thesis references.kref   ← the library: double-click it to open KherveRef
+  PDFs/                    ← your papers, named by citation key
+  library.bib              ← every reference as BibTeX, kept up to date for LaTeX</div>
+<p>KherveRef keeps its own data in a hidden <code>.kherveref</code> folder: one small file per
+reference and your collections. You never need to open it. Libraries made by early versions of
+KherveRef are tidied into this layout the first time they are opened.</p>
+<div class="note">The library is also a Git repository: every change you make is recorded, so
+nothing is ever lost — see <a href="#undo">Undo, delete, history</a> and
+<a href="#sync">Syncing</a>.</div>
+
+<h2 id="adding">Adding references</h2>
+<h3>Drop PDFs and folders</h3>
+<p>Drag PDFs, folders, or reference files anywhere onto the window — or use
+<span class="menu">File ▸ Add PDFs…</span> and <span class="menu">File ▸ Import folder…</span>.
+For each PDF, KherveRef looks for a DOI, an arXiv number or an ISBN, then fetches the full details
+from doi.org/Crossref, arXiv or OpenLibrary. When the PDF has no identifier it searches Crossref
+by title and only accepts a near-exact match, so you never get the wrong paper's details.</p>
+<p>Before a folder is imported, KherveRef shows everything it found — every subfolder and file — so
+you can untick what you don't want:</p>
+<figure>
+  <img src="img/import-preview.png" alt="Import preview listing a folder with subfolders and files, each with a checkbox, and an Import button saying how many files will be imported" width="720" height="560" style="max-width:560px">
+  <figcaption>Untick a folder to leave out everything in it. The button says exactly what will be imported.</figcaption>
+</figure>
+<p>The same PDF, DOI, arXiv number or ISBN is never added twice. A PDF for a reference you already
+have is attached to it instead.</p>
+
+<h3>Add by DOI, arXiv number or ISBN</h3>
+<p><span class="menu">File ▸ Add by DOI / arXiv / ISBN…</span> (<kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd>).
+Paste one identifier per line — links such as <code>https://doi.org/…</code> work, and so does a
+copied reference list containing DOIs. The dialog shows, as you type, what it recognised:</p>
+<figure>
+  <img src="img/add-identifier.png" alt="Add by identifier dialog: pasted identifiers with a list below marking each as a recognised DOI, arXiv number or ISBN, or as not recognised" width="560" height="480" style="max-width:460px">
+  <figcaption>A DOI is printed on almost every article; preprints have an arXiv number; books an ISBN.</figcaption>
+</figure>
+
+<h3>Paste or type</h3>
+<p><span class="menu">Edit ▸ Paste</span> (<kbd>Ctrl</kbd><kbd>V</kbd>) in the main window adds
+whatever is on the clipboard: identifiers, BibTeX, RIS or PubMed text. <span class="menu">File ▸ New
+empty reference</span> creates one to fill in by hand; its citation key is chosen when you save it.</p>
+
+<h2 id="importing">Importing other libraries</h2>
+<table>
+  <thead><tr><th>From</th><th>How</th><th>What comes across</th></tr></thead>
+  <tbody>
+    <tr><td>Zotero</td><td><span class="menu">File ▸ Import from Zotero…</span></td><td>Everything: references, PDFs, nested collections, tags, notes. Zotero is never changed and can stay open.</td></tr>
+    <tr><td>EndNote</td><td>Export as <b>XML</b> (or RIS), then <span class="menu">File ▸ Import file…</span></td><td>References; PDFs from the EndNote library's <code>.Data/PDF</code> folder when the export sits next to it.</td></tr>
+    <tr><td>Mendeley, Papers, Web of Science, Scopus, journal websites</td><td>Export <b>RIS</b> (<code>.ris</code>)</td><td>References; PDFs when the export links to them.</td></tr>
+    <tr><td>JabRef, BibDesk, Citavi, Paperpile, LaTeX projects</td><td><b>BibTeX / BibLaTeX</b> (<code>.bib</code>)</td><td>References; PDFs named in <code>file</code> fields.</td></tr>
+    <tr><td>PubMed</td><td>Save → PubMed format (<code>.nbib</code>)</td><td>References with PMID, MeSH keywords and DOI.</td></tr>
+    <tr><td>Anything else</td><td>CSL-JSON (<code>.json</code>), or a folder of PDFs</td><td>References; each PDF looked up online.</td></tr>
+  </tbody>
+</table>
+<p>Importing the same library again only adds what is new.</p>
+
+<h2 id="checking">Needs checking</h2>
+<p>When a PDF has no identifier, no exact title match, or you are offline, the reference is still
+added — from what the PDF itself says — and listed under <b>Needs checking</b> in the left pane
+(a warning sign in the list, an amber dot in Covers). Open it, correct what is wrong, or add its
+DOI and press <b>Look up details</b>. <span class="menu">Reference ▸ Look up all that need
+checking</span> retries them all, for example once you are back online.</p>
+
+<h2 id="browsing">Browsing &amp; editing</h2>
+<figure>
+  <img src="img/main-covers.png" alt="Covers view: references shown as a grid of their PDFs' front pages with title, authors and year" width="1280" height="740">
+  <figcaption>Covers view (<kbd>Ctrl</kbd><kbd>2</kbd>) shows each PDF's front page — the quickest way to recognise a paper.</figcaption>
+</figure>
+<ul>
+  <li><b>List and Covers.</b> Switch with the two buttons at the top right, <span class="menu">View ▸ List / Covers</span>, or <kbd>Ctrl</kbd><kbd>1</kbd> / <kbd>Ctrl</kbd><kbd>2</kbd>. In the list, hovering a title previews its front page.</li>
+  <li><b>Search.</b> The box at the top right searches authors, titles, keys, journals, DOIs, keywords and notes; every word must match.</li>
+  <li><b>Details.</b> The right pane edits the selected reference. Fields relevant to its type are shown; edits are saved with <b>Save</b> (<kbd>Ctrl</kbd><kbd>S</kbd>) or automatically when you select another reference. Click the front page to open the PDF.</li>
+  <li><b>Open a PDF</b> by double-clicking the reference. It opens in KhervePDF when installed, otherwise in your usual PDF viewer.</li>
+  <li><b>Notes.</b> Your own notes are never exported. <span class="menu">Reference ▸ Copy PDF annotations to notes</span> collects the highlights and comments you made in the PDF.</li>
+  <li><b>Citation keys</b> look like <code>smith2020surface</code> (first author, year, first title word). They never change by themselves, because documents cite them; <span class="menu">Edit ▸ Rename key…</span> changes one deliberately.</li>
+</ul>
+
+<h2 id="collections">Collections</h2>
+<p>Collections are folders for references; one reference can be in several. Create one with
+<span class="menu">Library ▸ New collection…</span> or by right-clicking the left pane (also for
+subcollections, renaming and deleting). <b>Drag references onto a collection</b> to file them;
+drop PDFs or folders onto a collection to import straight into it. Deleting a collection never
+deletes its references.</p>
+
+<h2 id="undo">Undo, delete, history</h2>
+<ul>
+  <li><b>Delete</b> a reference with the toolbar's <b>Delete reference</b>, the <kbd>Delete</kbd> key, or right-click ▸ Delete. Its PDF goes too.</li>
+  <li><b>Undo / Redo</b> (<kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd>) reverse anything done in the window — a whole folder import, an edit, a delete, a collection change — PDFs included. Undo refuses (and says why) if the same references were changed meanwhile by Claude or a sync, so it never discards someone else's change.</li>
+  <li><b>History.</b> <span class="menu">Library ▸ History…</span> lists every change ever made to the library. Undo itself is recorded there, so nothing is ever lost.</li>
+</ul>
+
+<h2 id="export">Citing &amp; exporting</h2>
+<h3>Citation styles</h3>
+<p>Choose under <span class="menu">Edit ▸ Citation style</span>: APA 7th, Harvard (Cite Them Right),
+Chicago author–date, Vancouver, IEEE, Nature, ACS and RSC. These are the official Citation Style
+Language styles, the same as Zotero and Mendeley use.</p>
+<ul>
+  <li><span class="menu">Edit ▸ Copy formatted citation</span> (<kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>C</kbd>) — e.g. <i>(Smith et al., 2020)</i>, ready to paste into Word, Pages or an email.</li>
+  <li><span class="menu">Edit ▸ Copy formatted reference</span> (<kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd>) — the reference-list entry, with italics.</li>
+  <li><b>Drag</b> references into a document: Word and other rich-text apps get the formatted citation; LaTeX editors get <code>\cite{key}</code>.</li>
+</ul>
+<h3>BibTeX and other files</h3>
+<p><span class="menu">File ▸ Export BibLaTeX…</span> (<kbd>Ctrl</kbd><kbd>E</kbd>), <span class="menu">Export classic BibTeX…</span> and
+<span class="menu">Export CSL-JSON…</span> export the selected references (when several are selected)
+or everything shown. <code>library.bib</code> in the library folder is always up to date too.</p>
+
+<h2 id="word">Microsoft Word</h2>
+<h3>The KherveRef panel (recommended)</h3>
+<p>A panel inside Word that searches your library, inserts live citations and keeps the
+bibliography up to date in any of KherveRef's styles.</p>
+<ol class="steps">
+  <li>In KherveRef: <span class="menu">Word ▸ Install the KherveRef panel in Word</span>.
+    <br><i>On a Mac</i>, macOS doesn't let apps write into Word's folder, so two Finder windows open:
+    drag <code>kherveref-manifest.xml</code> into the <code>wef</code> window. This is needed once.</li>
+  <li>Quit and reopen Word. Click <b>Cite</b> on the Home tab (or <span class="menu">Add-ins ▸ Developer Add-ins ▸ KherveRef</span>).</li>
+  <li>Click in your text, pick one or more references in the panel (click to select, double-click to insert at once), then <b>Insert citation</b>.</li>
+  <li>Where the reference list should go, click <b>Insert bibliography</b>.</li>
+  <li>Change the style in the panel at any time; <b>Refresh all</b> renumbers and reformats every citation and the bibliography.</li>
+</ol>
+<div class="note">Keep KherveRef open while you cite: the panel is served by it. The style you
+choose is saved with the document.</div>
+<h3>Word's own citation tool</h3>
+<p><span class="menu">Word ▸ Keep Word's source list up to date</span> sends your library to Word's
+<span class="menu">References ▸ Insert Citation</span> and <span class="menu">Bibliography</span>. Word
+reads the list when it starts. On a Mac, macOS keeps Word's folder closed to other apps, so KherveRef
+keeps the list in <code>Documents/KherveRef/Sources.xml</code>: in Word use
+<span class="menu">References ▸ Citations ▸ Citation Source Manager ▸ Browse…</span> and choose that file.</p>
+
+<h2 id="khervetex">KherveTeX</h2>
+<p>In KherveTeX, <span class="menu">Insert ▸ Citation…</span> lists the references of your KherveRef
+libraries — KherveRef need not be running. The cited references are saved inside the
+<code>.ktex</code> file, so the document still compiles on a computer without your library.
+<span class="menu">Insert ▸ Check citations</span> lists cited keys that no library knows.</p>
+
+<h2 id="khervepdf">KhervePDF</h2>
+<ul>
+  <li>PDFs open in KhervePDF when it is installed; <span class="menu">Reference ▸ Locate KhervePDF…</span> points at another copy, and <span class="menu">Reference ▸ Open PDFs in KhervePDF</span> switches it off.</li>
+  <li>In KhervePDF, <span class="menu">Tools ▸ Add to KherveRef</span> adds the open PDF to your library, and <span class="menu">Show in KherveRef</span> selects its reference.</li>
+</ul>
+
+<h2 id="sync">Syncing between computers</h2>
+<p>Your library is a Git repository, so it syncs through any Git host (GitHub, GitLab…).</p>
+<ol class="steps">
+  <li>Create an empty <b>private</b> repository on GitHub.</li>
+  <li><span class="menu">Library ▸ Set remote…</span> and paste its address, e.g. <code>https://github.com/you/my-references.git</code>.</li>
+  <li><b>Push</b> sends your changes; <b>Pull</b> brings changes from your other computers. Both are on the toolbar.</li>
+</ol>
+<p>On the second computer, clone the repository (for example with GitHub Desktop) and open its
+<code>.kref</code> file. Because each reference is its own file, edits to different references on two
+computers merge cleanly.</p>
+
+<h2 id="ai">AI: Claude</h2>
+<p><span class="menu">AI ▸ Connect to Claude (MCP)…</span> shows how to let Claude work with your
+library. Claude can then search it, add papers by DOI, arXiv number, ISBN, PDF or BibTeX, edit and
+file references, and export BibTeX — for example while writing with you. It works on the library
+folder directly, so KherveRef need not be open; an open window shows Claude's changes at once,
+and each change appears in the library's history.</p>
+<pre><code>claude mcp add kherveref -- python -m kherveref.mcp_server</code></pre>
+<p>The dialog gives the exact command for your installation, with a button to copy it, and the
+settings for Claude Desktop.</p>
+
+<h2 id="keys">Keyboard shortcuts</h2>
+<p>On a Mac, use <kbd>⌘</kbd> for <kbd>Ctrl</kbd>, <kbd>⌥</kbd> for <kbd>Alt</kbd>
+and <kbd>⌫</kbd> for <kbd>Delete</kbd>; the guide opens with <kbd>⌘</kbd><kbd>?</kbd>.</p>
+<table>
+  <thead><tr><th>Action</th><th>Shortcut</th></tr></thead>
+  <tbody>
+    <tr><td>Add PDFs</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd></td></tr>
+    <tr><td>Add by DOI / arXiv / ISBN</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></td></tr>
+    <tr><td>New empty reference</td><td><kbd>Ctrl</kbd><kbd>N</kbd></td></tr>
+    <tr><td>Open library</td><td><kbd>Ctrl</kbd><kbd>O</kbd></td></tr>
+    <tr><td>Paste identifiers / BibTeX / RIS</td><td><kbd>Ctrl</kbd><kbd>V</kbd></td></tr>
+    <tr><td>Find</td><td><kbd>Ctrl</kbd><kbd>F</kbd></td></tr>
+    <tr><td>List / Covers view</td><td><kbd>Ctrl</kbd><kbd>1</kbd> / <kbd>Ctrl</kbd><kbd>2</kbd></td></tr>
+    <tr><td>Save the details</td><td><kbd>Ctrl</kbd><kbd>S</kbd></td></tr>
+    <tr><td>Undo / Redo</td><td><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></td></tr>
+    <tr><td>Delete reference</td><td><kbd>Delete</kbd></td></tr>
+    <tr><td>Look up details</td><td><kbd>Ctrl</kbd><kbd>L</kbd></td></tr>
+    <tr><td>Copy citation key</td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></td></tr>
+    <tr><td>Copy formatted citation / reference</td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>C</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd></td></tr>
+    <tr><td>Export BibLaTeX</td><td><kbd>Ctrl</kbd><kbd>E</kbd></td></tr>
+    <tr><td>This guide</td><td><kbd>F1</kbd></td></tr>
+  </tbody>
+</table>
+
+<h2 id="trouble">Troubleshooting</h2>
+<h3>A paper was added with the wrong or missing details</h3>
+<p>Find it under <b>Needs checking</b>, add its DOI in the details, and press <b>Look up details</b>.
+Scanned PDFs without a text layer can't be read: fill them in by hand.</p>
+<h3>The Word panel says “KherveRef isn't running”</h3>
+<p>Open KherveRef, then click <i>try again</i> in the panel. If it persists, reinstall the panel
+(<span class="menu">Word ▸ Install the KherveRef panel in Word</span>) and restart Word.</p>
+<h3>“Operation not permitted” on a Mac</h3>
+<p>macOS protects Word's own folders from other apps. Use the Finder step the installer offers;
+copies you make yourself in Finder are allowed.</p>
+<h3>Push or Pull fails</h3>
+<p>KherveRef uses your computer's Git and its sign-in. Check the remote address under
+<span class="menu">Library ▸ Set remote…</span>, and that you can push to that repository with
+GitHub Desktop or <code>git push</code>.</p>
+<div class="warn">KherveRef is open source (GPL-3.0). Questions and problems:
+<a href="https://github.com/gkerherve/KherveRef/issues">github.com/gkerherve/KherveRef/issues</a>.</div>
+</main>
+</div>
+</body>
+</html>

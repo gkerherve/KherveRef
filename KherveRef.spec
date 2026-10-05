@@ -44,7 +44,8 @@ a = Analysis(
     datas=datas + [(str(ROOT / "kherveref" / "styles"), "kherveref/styles"),
                    (str(ROOT / "kherveref" / "word_manifest.xml"), "kherveref"),
                    # The Word panel's page, served by KherveRef itself.
-                   (str(ROOT / "docs" / "word"), "kherveref/word_panel")],
+                   (str(ROOT / "docs" / "word"), "kherveref/word_panel"),
+                   (str(ROOT / "docs" / "guide"), "kherveref/guide")],
     hiddenimports=hiddenimports + [
         "kherveref.mcp_server", "kherveref.smoke", "kherveref.zotero",
         "PySide6.QtNetwork", "sqlite3",

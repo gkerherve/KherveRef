@@ -384,7 +384,11 @@ class MainWindow(QMainWindow):
         self.act_push = A("P&ush", lambda: self._run_git(git_backend.push, "Push"),
                           "push", None, "Send this library's changes to its Git remote")
         self.act_about = A("&About KherveRef", self._about, "about")
-        self.act_claude = A("Use with &Claude (MCP)…", self._show_mcp_help, "claude")
+        self.act_claude = A("&Connect to Claude (MCP)…", self._show_mcp_help, "claude",
+                            None, "Let Claude search, add, edit and export "
+                                  "your references")
+        self.act_guide = A("KherveRef &User Guide", self._open_guide, "about",
+                           QKeySequence.HelpContents)
 
         self._library_actions = [
             self.act_close, self.act_add_pdfs, self.act_import_folder,
@@ -462,8 +466,12 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addActions([self.act_remote, self.act_pull, self.act_push])
 
+        m = mb.addMenu("&AI")
+        m.addAction(self.act_claude)
+
         self._help_menu = mb.addMenu("&Help")
-        self._help_menu.addAction(self.act_claude)
+        self._help_menu.addAction(self.act_guide)
+        self._help_menu.addSeparator()
         self._help_menu.addAction(self.act_about)
 
     def _build_toolbar(self) -> None:
@@ -1721,6 +1729,15 @@ class MainWindow(QMainWindow):
         if self.library is not None:
             self._rebuild_tree()
             self._model.layoutChanged.emit()
+
+    def _open_guide(self) -> None:
+        """The guide shipped with the app; the online copy otherwise."""
+        local = Path(__file__).resolve().parent / "guide" / "index.html"
+        if not local.exists():
+            local = Path(__file__).resolve().parent.parent / "docs" / "guide" / "index.html"
+        url = (QUrl.fromLocalFile(str(local)) if local.exists()
+               else QUrl("https://gkerherve.github.io/KherveRef/guide/"))
+        QDesktopServices.openUrl(url)
 
     def _show_mcp_help(self) -> None:
         import sys as _sys

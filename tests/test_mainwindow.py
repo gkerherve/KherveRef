@@ -145,3 +145,16 @@ def test_add_request_imports(win, tmp_path):
     win.handle_request({"cmd": "add", "paths": [str(pdf)]})
     wait_for_job(win)
     assert "martin2021preprint" in win.entries
+
+
+def test_ai_menu_and_guide(win, monkeypatch):
+    menus = {a.text().replace("&", ""): a.menu() for a in win.menuBar().actions()}
+    assert win.act_claude in menus["AI"].actions()
+    assert win.act_claude not in menus["Help"].actions()
+    assert win.act_guide in menus["Help"].actions()
+    opened = []
+    from kherveref import mainwindow
+    monkeypatch.setattr(mainwindow.QDesktopServices, "openUrl",
+                        staticmethod(lambda url: opened.append(url)))
+    win._open_guide()
+    assert opened and opened[0].toLocalFile().endswith("docs/guide/index.html")

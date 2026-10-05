@@ -1,5 +1,7 @@
 # KherveRef
 
+**[User guide](https://gkerherve.github.io/KherveRef/guide/)** (also *Help ▸ KherveRef User Guide*, F1).
+
 A reference manager that ties [KherveTeX](https://github.com/gkerherve/kherveTeX)
 and [KhervePDF](https://github.com/gkerherve/KhervePDF) together, with
 BibLaTeX export.
@@ -84,7 +86,7 @@ again only adds what is new.
 
 ## Claude (MCP)
 
-*Help ▸ Use with Claude (MCP)…* shows the command to register KherveRef's
+*AI ▸ Connect to Claude (MCP)…* shows the command to register KherveRef's
 MCP server. Claude can then search, add (DOI / arXiv / ISBN / PDF / BibTeX),
 edit, file and export references. The server works on the library folder
 directly; an open KherveRef window picks up its changes.

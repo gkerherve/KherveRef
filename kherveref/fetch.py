@@ -107,6 +107,8 @@ def find_isbn(text: str) -> str:
 
 def _isbn_ok(s: str) -> bool:
     if len(s) == 10:
+        if not (s[:9].isdigit() and (s[9].isdigit() or s[9] == "X")):
+            return False
         total = sum((10 - i) * (10 if c == "X" else int(c))
                     for i, c in enumerate(s))
         return total % 11 == 0
