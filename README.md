@@ -67,9 +67,13 @@ rendered once in the background and cached in `.kherveref/cache/`.
 - **The KherveRef panel in Word:** *Word ▸ Install the KherveRef panel in
   Word*, restart Word, then *Home ▸ Cite*. Search the library, insert
   citations, add a bibliography; *Refresh all* renumbers and reformats
-  everything in the chosen style. The panel (`docs/word/`, served by
-  GitHub Pages) talks to KherveRef on this computer through a read-only
+  everything in the chosen style (tested in Word 16.113 on macOS). The
+  panel (`docs/word/`) is served by KherveRef itself through a read-only
   service on `127.0.0.1:23120`, so keep KherveRef open while citing.
+- **On a Mac**, macOS doesn't let apps write into Word's own folders. The
+  installer then opens Word's add-in folder and the prepared file in
+  Finder for you to drag across once, and Word's source list is kept in
+  `~/Documents/KherveRef/Sources.xml` for Word's *Source Manager ▸ Browse*.
 
 ## Importing from Zotero
 

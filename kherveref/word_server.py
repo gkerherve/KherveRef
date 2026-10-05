@@ -13,7 +13,9 @@ formatted in the chosen style. Nothing here writes to the library.
 from __future__ import annotations
 
 import json
+import mimetypes
 import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
@@ -21,6 +23,10 @@ from urllib.parse import parse_qs, urlparse
 from . import __version__, cite
 
 PORT = 23120          # Zotero uses 23119
+# The panel's own files, also served here: Word for Mac's web view won't
+# let an HTTPS page call http://127.0.0.1, but a page loaded from this
+# server calls it as its own origin.
+PANEL_DIR = Path(__file__).resolve().parent.parent / "docs" / "word"
 ALLOWED_ORIGINS = {"https://gkerherve.github.io", "https://localhost:3000",
                    "http://localhost:3000", "null"}
 
@@ -64,6 +70,20 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _file(self, name: str):
+        base = panel_dir()
+        path = (base / name).resolve()
+        if base not in path.parents or not path.is_file():
+            return self._json({"error": "not found"}, 404)
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0]
+                         or "application/octet-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_OPTIONS(self):  # noqa: N802
         self.send_response(204)
         self._cors()
@@ -74,6 +94,8 @@ class _Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = parse_qs(url.query)
         name, entries = self.provider()
+        if url.path.startswith("/word/"):
+            return self._file(url.path[len("/word/"):])
         if url.path == "/api/status":
             return self._json({"app": "KherveRef", "version": __version__,
                                "library": name, "count": len(entries),
@@ -131,6 +153,12 @@ class WordServer:
     def stop(self) -> None:
         self.httpd.shutdown()
         self.httpd.server_close()
+
+
+def panel_dir() -> Path:
+    """docs/word in a checkout; kherveref/word_panel in a frozen build."""
+    frozen = Path(__file__).resolve().parent / "word_panel"
+    return (frozen if frozen.is_dir() else PANEL_DIR).resolve()
 
 
 def start(provider: Provider) -> WordServer | None:

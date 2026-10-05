@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- KherveRef panel for Microsoft Word. KherveRef installs this file
-     (Word ▸ Install the KherveRef panel in Word); the panel itself is
-     served from GitHub Pages and talks to KherveRef on this computer. -->
+     (Word ▸ Install the KherveRef panel in Word). The panel is served by
+     KherveRef itself on 127.0.0.1: Word for Mac's web view refuses an
+     HTTPS page that calls a local http service, so page and data must
+     share that origin. KherveRef must be open while citing. -->
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
@@ -13,11 +15,11 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="KherveRef"/>
   <Description DefaultValue="Cite from your KherveRef library and keep the bibliography up to date."/>
-  <IconUrl DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-80.png"/>
+  <IconUrl DefaultValue="http://127.0.0.1:23120/word/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="http://127.0.0.1:23120/word/icon-80.png"/>
   <SupportUrl DefaultValue="https://github.com/gkerherve/KherveRef"/>
   <AppDomains>
-    <AppDomain>https://gkerherve.github.io</AppDomain>
+    <AppDomain>http://127.0.0.1:23120</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Document"/>
@@ -28,7 +30,7 @@
     </Sets>
   </Requirements>
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://gkerherve.github.io/KherveRef/word/taskpane.html"/>
+    <SourceLocation DefaultValue="http://127.0.0.1:23120/word/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
@@ -73,12 +75,12 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="KR.Icon16" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-16.png"/>
-        <bt:Image id="KR.Icon32" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-32.png"/>
-        <bt:Image id="KR.Icon80" DefaultValue="https://gkerherve.github.io/KherveRef/word/icon-80.png"/>
+        <bt:Image id="KR.Icon16" DefaultValue="http://127.0.0.1:23120/word/icon-16.png"/>
+        <bt:Image id="KR.Icon32" DefaultValue="http://127.0.0.1:23120/word/icon-32.png"/>
+        <bt:Image id="KR.Icon80" DefaultValue="http://127.0.0.1:23120/word/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="KR.Pane" DefaultValue="https://gkerherve.github.io/KherveRef/word/taskpane.html"/>
+        <bt:Url id="KR.Pane" DefaultValue="http://127.0.0.1:23120/word/taskpane.html"/>
         <bt:Url id="KR.Home" DefaultValue="https://github.com/gkerherve/KherveRef"/>
       </bt:Urls>
       <bt:ShortStrings>

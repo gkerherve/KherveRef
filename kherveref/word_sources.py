@@ -158,13 +158,32 @@ def _save_state(data: dict) -> None:
     (d / _STATE).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def fallback_path() -> Path:
+    """Where the list goes when macOS keeps Word's own folder closed:
+    Word's Source Manager ▸ Browse… opens it from there."""
+    return Path.home() / "Documents" / "KherveRef" / "Sources.xml"
+
+
 def sync(library_root: Path, entries, path: Path | None = None) -> dict:
-    """Merge the library into Word's source list. Returns counts."""
-    path = Path(path or default_path())
+    """Merge the library into Word's source list. Returns counts, plus
+    "fallback": True when it had to write fallback_path() instead."""
+    if path is None:
+        entries = list(entries)
+        try:
+            return _sync(library_root, entries, default_path())
+        except PermissionError:
+            res = _sync(library_root, entries, fallback_path())
+            res["fallback"] = True
+            return res
+    return _sync(library_root, entries, Path(path))
+
+
+def _sync(library_root: Path, entries, path: Path) -> dict:
     root_key = Path(library_root).resolve().as_posix()
     st = _load_state()
     managed = set(st.get(root_key, []))
 
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         tree = ET.parse(path)
         root = tree.getroot()
@@ -197,6 +216,7 @@ def sync(library_root: Path, entries, path: Path | None = None) -> dict:
     os.replace(tmp, path)
     st[root_key] = sorted(wanted)
     _save_state(st)
-    return {"written": added, "removed": removed, "kept_user_sources":
+    return {"fallback": False, "written": added, "removed": removed,
+            "kept_user_sources":
             len(root.findall(B + "Source")) - added, "skipped": skipped,
             "path": str(path)}

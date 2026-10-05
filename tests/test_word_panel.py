@@ -1,4 +1,5 @@
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -72,15 +73,50 @@ def test_manifest_copies_match():
     assert (ROOT / "docs" / "word" / "manifest.xml").read_bytes() == \
         word_addin.MANIFEST.read_bytes()
     text = word_addin.MANIFEST.read_text()
-    assert word_addin.ADDIN_ID in text and "taskpane.html" in text
+    assert word_addin.ADDIN_ID in text
+    assert "http://127.0.0.1:23120/word/taskpane.html" in text
 
 
 def test_install_on_mac(tmp_path, monkeypatch):
     monkeypatch.setattr(word_addin.sys, "platform", "darwin")
     monkeypatch.setattr(word_addin, "mac_wef_dir", lambda: tmp_path / "wef")
     assert not word_addin.is_installed()
-    where = word_addin.install()
-    assert Path(where).read_bytes() == word_addin.MANIFEST.read_bytes()
+    res = word_addin.install()
+    assert res.done and res.manifest.read_bytes() == word_addin.MANIFEST.read_bytes()
     assert word_addin.is_installed()
     word_addin.uninstall()
     assert not word_addin.is_installed()
+
+
+def test_install_on_mac_when_word_folder_is_protected(tmp_path, monkeypatch):
+    monkeypatch.setattr(word_addin.sys, "platform", "darwin")
+    wef = tmp_path / "Word" / "wef"
+    monkeypatch.setattr(word_addin, "mac_wef_dir", lambda: wef)
+    monkeypatch.setattr(word_addin, "staging_dir", lambda: tmp_path / "Docs")
+    real_mkdir = Path.mkdir
+
+    def guarded(self, *a, **k):
+        if self == wef:
+            raise PermissionError("Operation not permitted")
+        return real_mkdir(self, *a, **k)
+    monkeypatch.setattr(Path, "mkdir", guarded)
+    calls = []
+    monkeypatch.setattr(word_addin.subprocess, "run",
+                        lambda cmd, **k: calls.append(cmd))
+    res = word_addin.install()
+    assert not res.done and res.folder == wef
+    assert res.manifest == tmp_path / "Docs" / word_addin.FILENAME
+    assert res.manifest.read_bytes() == word_addin.MANIFEST.read_bytes()
+    assert calls[0][0] == "osascript" and ["open", str(wef)] in calls
+
+
+def test_panel_page_served(server):
+    with urllib.request.urlopen(server.replace("/api", "/word/taskpane.html"),
+                                timeout=5) as r:
+        assert r.status == 200 and b"KherveRef" in r.read()
+    try:
+        urllib.request.urlopen(server.replace("/api", "/word/../../KherveRef.spec"),
+                               timeout=5)
+        assert False, "path traversal must be refused"
+    except urllib.error.HTTPError as e:
+        assert e.code == 404

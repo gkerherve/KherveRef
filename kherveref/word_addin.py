@@ -4,6 +4,11 @@ The panel's manifest (word_manifest.xml, the same file published in
 docs/word/) tells Word where the panel lives. Word picks it up from:
 
 * macOS: ~/Library/Containers/com.microsoft.Word/Data/Documents/wef/
+  — Word's own container, which macOS does not let other apps write to
+  (not even Finder when scripted). KherveRef then has Finder create the
+  folder, prepares the file in ~/Documents/KherveRef and opens both, for
+  the user to drag the file across once: a copy the user makes in
+  Finder is allowed.
 * Windows: HKCU\\Software\\Microsoft\\Office\\16.0\\WEF\\Developer,
   a value naming the manifest file (Word's developer add-ins).
 
@@ -13,7 +18,9 @@ Add-ins) and as a "Cite" button on the Home tab, after a restart.
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import state
@@ -31,7 +38,10 @@ def mac_wef_dir() -> Path:
 
 def is_installed() -> bool:
     if sys.platform == "darwin":
-        return (mac_wef_dir() / FILENAME).exists()
+        try:
+            return (mac_wef_dir() / FILENAME).exists()
+        except PermissionError:
+            return False
     if sys.platform.startswith("win"):
         try:
             import winreg
@@ -43,13 +53,39 @@ def is_installed() -> bool:
     return False
 
 
-def install() -> str:
-    """Register the panel; returns where. Raises OSError on failure."""
+@dataclass
+class InstallResult:
+    done: bool              # False: the user still has one drag to make
+    manifest: Path          # where the manifest is (or waits to be dragged from)
+    folder: Path | None = None   # macOS: the wef folder to drag it into
+
+
+def staging_dir() -> Path:
+    return Path.home() / "Documents" / "KherveRef"
+
+
+def install() -> InstallResult:
+    """Register the panel. Raises OSError when it cannot even prepare."""
     if sys.platform == "darwin":
         d = mac_wef_dir()
-        d.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(MANIFEST, d / FILENAME)
-        return str(d / FILENAME)
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(MANIFEST, d / FILENAME)
+            return InstallResult(True, d / FILENAME)
+        except PermissionError:
+            pass
+        # Finder may create the folder for us; the copy itself it may not.
+        subprocess.run(["osascript", "-e",
+                        'set d to (POSIX file "' + str(d.parent) + '") as alias\n'
+                        'tell application "Finder" to if not (exists folder '
+                        '"wef" of d) then make new folder at d with properties '
+                        '{name:"wef"}'], capture_output=True, timeout=30)
+        staged = staging_dir() / FILENAME
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(MANIFEST, staged)
+        subprocess.run(["open", str(d)], capture_output=True)
+        subprocess.run(["open", "-R", str(staged)], capture_output=True)
+        return InstallResult(False, staged, d)
     if sys.platform.startswith("win"):
         import winreg
         target = state.state_dir() / "word" / FILENAME
@@ -57,13 +93,18 @@ def install() -> str:
         shutil.copyfile(MANIFEST, target)
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _REG_KEY) as k:
             winreg.SetValueEx(k, ADDIN_ID, 0, winreg.REG_SZ, str(target))
-        return str(target)
+        return InstallResult(True, target)
     raise OSError("Microsoft Word add-ins are only available on Windows and macOS")
 
 
 def uninstall() -> None:
     if sys.platform == "darwin":
-        (mac_wef_dir() / FILENAME).unlink(missing_ok=True)
+        try:
+            (mac_wef_dir() / FILENAME).unlink(missing_ok=True)
+        except PermissionError:
+            raise OSError("macOS doesn't let KherveRef change Word's add-in "
+                          f"folder. Delete {FILENAME} from it in Finder "
+                          "(Word ▸ Install… opens the folder).") from None
     elif sys.platform.startswith("win"):
         import winreg
         try:

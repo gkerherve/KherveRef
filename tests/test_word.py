@@ -105,3 +105,21 @@ def test_word_sync_from_window(win, tmp_path, monkeypatch):
         QApplication.processEvents()
     tags = [s.findtext(B + "Tag") for s in ET.parse(target).getroot()]
     assert tags == ["smith2020surface"]
+
+
+def test_sync_falls_back_when_word_folder_is_protected(tmp_path, monkeypatch):
+    a, b = _entries()
+    blocked = tmp_path / "Word" / "Sources.xml"
+    fallback = tmp_path / "Docs" / "Sources.xml"
+    monkeypatch.setattr(word_sources, "default_path", lambda: blocked)
+    monkeypatch.setattr(word_sources, "fallback_path", lambda: fallback)
+    real = word_sources._sync
+
+    def guarded(root, entries, path):
+        if path == blocked:
+            raise PermissionError("Operation not permitted")
+        return real(root, entries, path)
+    monkeypatch.setattr(word_sources, "_sync", guarded)
+    res = word_sources.sync(tmp_path / "lib", [a, b])
+    assert res["fallback"] and res["path"] == str(fallback)
+    assert len(ET.parse(fallback).getroot()) == 2

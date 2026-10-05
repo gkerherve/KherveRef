@@ -8,7 +8,10 @@
  */
 "use strict";
 
-const API = "http://127.0.0.1:23120/api";
+// Served by KherveRef itself (Word for Mac) the API is this page's own
+// origin; served from GitHub Pages it is KherveRef's loopback address.
+const API = (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  ? location.origin : "http://127.0.0.1:23120") + "/api";
 const CITE_TAG = "KREF:";
 const BIB_TAG = "KREF-BIB";
 const STYLE_SETTING = "kherveref-style";
@@ -145,15 +148,27 @@ async function refreshAll() {
   try {
     await Word.run(async (ctx) => {
       const all = ctx.document.contentControls;
-      all.load("items/tag");
+      all.load("items/tag,items/font/name,items/font/size");
+      const first = ctx.document.body.paragraphs.getFirst();
+      first.load("font/name,font/size");
       await ctx.sync();
+      // insertHtml brings Word's default HTML font; keep each control in
+      // the font of the text it sits in (or the document's body font when
+      // the control already mixes fonts).
+      const keepFont = (c) => ({ name: c.font.name || first.font.name,
+                                 size: c.font.size || first.font.size });
       const cites = all.items.filter((c) => (c.tag || "").startsWith(CITE_TAG));
       const bibs = all.items.filter((c) => c.tag === BIB_TAG);
       const clusters = cites.map((c) => c.tag.slice(CITE_TAG.length).split(";").filter(Boolean));
       const f = await api("/format", { clusters, style: currentStyle() });
+      const fonts = new Map([...cites, ...bibs].map((c) => [c, keepFont(c)]));
       cites.forEach((c, i) => c.insertHtml(f.citations[i] || "?", "Replace"));
       const html = f.bibliography.map((b) => `<p>${b}</p>`).join("");
       bibs.forEach((b) => b.insertHtml(html || "<p>(no citations yet)</p>", "Replace"));
+      for (const [c, font] of fonts) {
+        if (font.name) c.font.name = font.name;
+        if (font.size) c.font.size = font.size;
+      }
       await ctx.sync();
       const missing = f.missing.length ? ` · not in the library: ${f.missing.join(", ")}` : "";
       status(`${cites.length} citation${cites.length === 1 ? "" : "s"} updated${missing}`);

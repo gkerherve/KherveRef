@@ -1288,28 +1288,57 @@ class MainWindow(QMainWindow):
             return
         msg = (f"Word's source list: {res['written']} reference"
                f"{'s' * (res['written'] != 1)} from {self.library.name}")
-        if word_sources.word_running():
+        if res.get("fallback"):
+            msg = (f"Saved {res['written']} references for Word in "
+                   f"{res['path']}")
+            if not quiet and not QSettings(*SETTINGS).value(
+                    "word_fallback_explained", False, type=bool):
+                QSettings(*SETTINGS).setValue("word_fallback_explained", True)
+                QMessageBox.information(
+                    self, "Word's source list",
+                    "macOS doesn't let apps write into Word's own folder, so "
+                    f"KherveRef keeps the list in\n{res['path']}\nand updates "
+                    "it after every change.\n\nIn Word: References ▸ Citations "
+                    "▸ (gear) Citation Source Manager ▸ Browse…, choose that "
+                    "file, then copy the references you want to your list. "
+                    "The KherveRef panel (Word ▸ Install the KherveRef panel) "
+                    "needs none of this.")
+        elif word_sources.word_running():
             msg += " — quit and reopen Word to see changes"
         self.statusBar().showMessage(msg, 8000)
 
     def _install_word_panel(self) -> None:
         try:
-            where = word_addin.install()
+            res = word_addin.install()
         except OSError as e:
             QMessageBox.warning(self, "Word panel", str(e))
             return
-        running = word_sources.word_running()
+        then = ("Then quit and reopen Word" if word_sources.word_running()
+                else "Then open Word")
+        use = (", and click Cite on the Home tab (or Add-ins ▸ Developer "
+               "Add-ins ▸ KherveRef).\n\nThe panel searches the library open "
+               "here, inserts citations, adds a bibliography and renumbers "
+               "everything when you press Refresh all. Keep KherveRef open "
+               "while you cite: the panel is served by it.")
+        if res.done:
+            QMessageBox.information(self, "Word panel installed",
+                                    f"The KherveRef panel is registered.\n\n{then}{use}")
+            return
         QMessageBox.information(
-            self, "Word panel installed",
-            ("Quit and reopen Word, then " if running else "Open Word, then ")
-            + "click Cite on the Home tab (or Insert ▸ Add-ins ▸ My Add-ins ▸ "
-            "Developer Add-ins ▸ KherveRef).\n\nThe panel searches the library "
-            "open here, inserts citations, adds a bibliography and renumbers "
-            "everything when you press Refresh. Keep KherveRef open while you "
-            f"cite.\n\n(Registered: {where})")
+            self, "One step for you in Finder",
+            "macOS doesn't let apps write into Word's add-in folder, but you "
+            "can. Two Finder windows have just opened:\n\n"
+            f"• “{res.folder.name}” — Word's add-in folder\n"
+            f"• {res.manifest.parent} with {res.manifest.name} selected\n\n"
+            f"Drag {res.manifest.name} into the “{res.folder.name}” window "
+            f"(this is needed only once).\n\n{then}{use}")
 
     def _remove_word_panel(self) -> None:
-        word_addin.uninstall()
+        try:
+            word_addin.uninstall()
+        except OSError as e:
+            QMessageBox.information(self, "Word panel", str(e))
+            return
         self.statusBar().showMessage("KherveRef panel removed from Word "
                                      "(restart Word)", 6000)
 
@@ -1325,9 +1354,10 @@ class MainWindow(QMainWindow):
             "References ▸ Bibliography builds the reference list in Word's "
             "styles. Word reads the list when it starts: quit and reopen Word "
             "after changes.\n\n"
-            "3. The KherveRef panel inside Word (Insert ▸ Add-ins) inserts live "
-            "citations and keeps the bibliography up to date in any of "
-            "KherveRef's styles.")
+            "3. The KherveRef panel inside Word (Word ▸ Install the KherveRef "
+            "panel, then Home ▸ Cite) inserts live citations and keeps the "
+            "bibliography up to date in any of KherveRef's styles. KherveRef "
+            "serves the panel, so keep it open while citing.")
 
     def _copy_bib(self, dialect: str) -> None:
         entries = self.selected_entries()
