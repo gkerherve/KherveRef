@@ -9,6 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import (QEvent, QFileSystemWatcher, QItemSelectionModel,
                             QSettings,
                             QSize, Qt, QThread, QTimer, QUrl, Signal)
+from PySide6.QtCore import QMimeData
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices,
                            QIcon, QKeySequence)
 from PySide6.QtWidgets import (
@@ -19,8 +20,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from . import (bibtex, csl, git_backend, icons, importer, library, links,
-               state, store, themes)
+from . import (bibtex, cite, csl, git_backend, icons, importer, library, links,
+               state, store, themes, word_sources)
 from . import version_string
 from .covers import CoversView
 from .editor import EntryEditor
@@ -195,7 +196,8 @@ class MainWindow(QMainWindow):
             lambda paths, cid: self.import_paths([Path(p) for p in paths], cid))
         self._tree.itemChanged.connect(self._collection_renamed)
 
-        self._model = RefTableModel(self, thumb_path=self._thumbs.path)
+        self._model = RefTableModel(self, thumb_path=self._thumbs.path,
+                                    formatted=self._formatted_citation)
         self._proxy = RefFilterProxy(self)
         self._proxy.setSourceModel(self._model)
         self._table = QTableView()
@@ -299,6 +301,29 @@ class MainWindow(QMainWindow):
                               "Ctrl+Shift+C")
         self.act_copy_cite = A("Copy \\&cite{…}", self._copy_cite)
         self.act_copy_bib = A("Copy Bib&LaTeX", lambda: self._copy_bib("biblatex"))
+        self.act_copy_citation = A("Copy formatted &citation", self._copy_citation,
+                                   "copy", "Ctrl+Alt+C",
+                                   "e.g. (Smith et al., 2020) — paste into Word")
+        self.act_copy_reference = A("Copy formatted r&eference",
+                                    self._copy_reference, None, "Ctrl+Alt+R",
+                                    "The reference-list entry, in the chosen style")
+        self._style_group = QActionGroup(self)
+        self._style_actions = []
+        current = self.citation_style()
+        for sid, label in cite.STYLES.items():
+            a = QAction(label, self, checkable=True)
+            a.setChecked(sid == current)
+            a.triggered.connect(lambda _=False, s=sid: self._set_style(s))
+            self._style_group.addAction(a)
+            self._style_actions.append(a)
+        self.act_word_sync = QAction("Keep &Word's source list up to date", self,
+                                     checkable=True)
+        self.act_word_sync.setChecked(
+            QSettings(*SETTINGS).value("word_sync", False, type=bool))
+        self.act_word_sync.toggled.connect(self._toggle_word_sync)
+        self.act_word_send = A("Send library to Word &now", self._send_to_word,
+                               "word")
+        self.act_word_help = A("Using KherveRef with Word…", self._word_help)
         self.act_paste = A("&Paste DOIs / BibTeX", self._paste, None,
                            QKeySequence.Paste)
         self.act_delete = A("&Delete reference…", self._delete_selected, "delete",
@@ -363,6 +388,7 @@ class MainWindow(QMainWindow):
             self.act_pull, self.act_push]
         self._selection_actions = [
             self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
+            self.act_copy_citation, self.act_copy_reference,
             self.act_delete, self.act_open_file, self.act_show_file,
             self.act_lookup, self.act_rename_key, self.act_annotations]
 
@@ -384,6 +410,10 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu("&Edit")
         m.addActions([self.act_undo, self.act_redo])
+        m.addSeparator()
+        m.addActions([self.act_copy_citation, self.act_copy_reference])
+        m_style = m.addMenu("Citation st&yle")
+        m_style.addActions(self._style_actions)
         m.addSeparator()
         m.addActions([self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
                       self.act_paste])
@@ -409,6 +439,11 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _=False, n=name: self._set_theme(n))
             group.addAction(a)
             m_theme.addAction(a)
+
+        m = mb.addMenu("&Word")
+        m.addActions([self.act_word_sync, self.act_word_send])
+        m.addSeparator()
+        m.addAction(self.act_word_help)
 
         m = mb.addMenu("&Library")
         m.addAction(self.act_new_collection)
@@ -601,6 +636,8 @@ class MainWindow(QMainWindow):
             self._redo.clear()
         self._update_undo_actions()
         self._update_status()
+        if self.act_word_sync.isChecked():
+            self._send_to_word(quiet=True)
 
     # ----- undo / redo -----
 
@@ -898,6 +935,8 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         menu.addActions([self.act_open_file, self.act_show_file])
         menu.addSeparator()
+        menu.addActions([self.act_copy_citation, self.act_copy_reference])
+        menu.addSeparator()
         menu.addActions([self.act_copy_key, self.act_copy_cite, self.act_copy_bib])
         menu.addSeparator()
         if self.collections:
@@ -1177,6 +1216,87 @@ class MainWindow(QMainWindow):
         keys = self.selected_keys()
         if keys:
             QApplication.clipboard().setText("\\cite{" + ",".join(keys) + "}")
+
+    # ----- formatted citations / Word -----
+
+    def citation_style(self) -> str:
+        s = QSettings(*SETTINGS).value("citation_style", cite.DEFAULT_STYLE)
+        return s if s in cite.STYLES else cite.DEFAULT_STYLE
+
+    def _set_style(self, style_id: str) -> None:
+        QSettings(*SETTINGS).setValue("citation_style", style_id)
+        self.statusBar().showMessage(f"Citation style: {cite.STYLES[style_id]}", 4000)
+
+    def _formatted_citation(self, entries) -> tuple[str, str, str]:
+        text = cite.format_citation(entries, self.citation_style())
+        html_ = f"<span>{text}</span>"
+        rtf = r"{\rtf1\ansi\deff0 " + cite.rtf_escape(text) + "}"
+        return text, html_, rtf
+
+    def _copy_citation(self) -> None:
+        entries = self.selected_entries()
+        if not entries:
+            return
+        text, html_, rtf = self._formatted_citation(entries)
+        md = QMimeData()
+        md.setText(text)
+        md.setHtml(html_)
+        md.setData("text/rtf", rtf.encode("ascii", "replace"))
+        QApplication.clipboard().setMimeData(md)
+        self.statusBar().showMessage(f"Copied {text}", 4000)
+
+    def _copy_reference(self) -> None:
+        entries = self.selected_entries()
+        if not entries:
+            return
+        refs = cite.format_reference(entries, self.citation_style())
+        md = QMimeData()
+        md.setText("\n".join(cite.to_text(r) for r in refs))
+        md.setHtml("".join(f"<p>{r}</p>" for r in refs))
+        rtf = r"{\rtf1\ansi\deff0 " + r"\par ".join(
+            cite.html_to_rtf(r) for r in refs) + "}"
+        md.setData("text/rtf", rtf.encode("ascii", "replace"))
+        QApplication.clipboard().setMimeData(md)
+        self.statusBar().showMessage(
+            f"Copied {len(refs)} reference{'s' * (len(refs) != 1)} "
+            f"({cite.STYLES[self.citation_style()]})", 4000)
+
+    def _toggle_word_sync(self, on: bool) -> None:
+        QSettings(*SETTINGS).setValue("word_sync", on)
+        if on:
+            self._send_to_word()
+
+    def _send_to_word(self, quiet: bool = False) -> None:
+        if self.library is None:
+            return
+        try:
+            res = word_sources.sync(self.library.root, self.entries.values())
+        except Exception as e:
+            if not quiet:
+                QMessageBox.warning(self, "Word", f"Could not update Word's "
+                                    f"source list:\n{e}")
+            return
+        msg = (f"Word's source list: {res['written']} reference"
+               f"{'s' * (res['written'] != 1)} from {self.library.name}")
+        if word_sources.word_running():
+            msg += " — quit and reopen Word to see changes"
+        self.statusBar().showMessage(msg, 8000)
+
+    def _word_help(self) -> None:
+        QMessageBox.information(
+            self, "Using KherveRef with Word",
+            "Three ways to cite in Microsoft Word:\n\n"
+            "1. Drag references from KherveRef into Word, or use Edit ▸ Copy "
+            "formatted citation / reference, in the style chosen under Edit ▸ "
+            "Citation style.\n\n"
+            "2. Turn on Word ▸ Keep Word's source list up to date. Your library "
+            "then appears in Word's own References ▸ Insert Citation, and "
+            "References ▸ Bibliography builds the reference list in Word's "
+            "styles. Word reads the list when it starts: quit and reopen Word "
+            "after changes.\n\n"
+            "3. The KherveRef panel inside Word (Insert ▸ Add-ins) inserts live "
+            "citations and keeps the bibliography up to date in any of "
+            "KherveRef's styles.")
 
     def _copy_bib(self, dialect: str) -> None:
         entries = self.selected_entries()

@@ -31,7 +31,7 @@ if not ICO.exists() or not PNG.exists():
                    check=True)
 
 datas, binaries, hiddenimports = [], [], []
-for pkg in ("qtawesome", "pymupdf", "pygit2", "certifi"):
+for pkg in ("qtawesome", "pymupdf", "pygit2", "certifi", "citeproc"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -41,7 +41,7 @@ a = Analysis(
     [str(ROOT / "KherveRef.py")],
     pathex=[str(ROOT)],
     binaries=binaries,
-    datas=datas,
+    datas=datas + [(str(ROOT / "kherveref" / "styles"), "kherveref/styles")],
     hiddenimports=hiddenimports + [
         "kherveref.mcp_server", "kherveref.smoke", "kherveref.zotero",
         "PySide6.QtNetwork", "sqlite3",

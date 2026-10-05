@@ -54,6 +54,7 @@ _PHOSPHOR: dict[str, str] = {
     "pull":         "ph.cloud-arrow-down",
     "about":        "ph.info",
     "claude":       "ph.sparkle",
+    "word":         "ph.file-text",
     "view_list":    "ph.list-bullets",
     "view_covers":  "ph.squares-four",
 }

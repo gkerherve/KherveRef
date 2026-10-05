@@ -20,8 +20,11 @@ ALL, UNFILED, REVIEW = "all", "unfiled", "review"
 
 
 class RefTableModel(QAbstractTableModel):
-    def __init__(self, parent=None, thumb_path=None):
+    def __init__(self, parent=None, thumb_path=None, formatted=None):
         super().__init__(parent)
+        # Entries -> (citation text, citation HTML, citation RTF) in the
+        # chosen style, so a drop into Word gets "(Smith et al., 2020)".
+        self._formatted = formatted
         self._rows: list[Entry] = []
         # Entry -> rendered front-page PNG (or None), for hover previews.
         self._thumb_path = thumb_path or (lambda e: None)
@@ -111,8 +114,18 @@ class RefTableModel(QAbstractTableModel):
                 keys.append(k)
         md = QMimeData()
         md.setData(KEYS_MIME, "\n".join(keys).encode())
-        # Dropped into a text editor (e.g. KherveTeX) it is a citation.
+        # Plain-text editors (LaTeX) get a \cite; rich-text ones (Word,
+        # Pages, mail) prefer the formatted citation.
         md.setText("\\cite{" + ",".join(keys) + "}")
+        if self._formatted is not None:
+            entries = [e for e in self._rows if e.key in keys]
+            try:
+                _text, html_, rtf = self._formatted(entries)
+                md.setHtml(html_)
+                md.setData("text/rtf", rtf.encode("ascii", "replace"))
+                md.setData("application/rtf", rtf.encode("ascii", "replace"))
+            except Exception:
+                pass        # a style hiccup must never break dragging
         return md
 
     def supportedDragActions(self):

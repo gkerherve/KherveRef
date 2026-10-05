@@ -53,6 +53,18 @@ selected reference's front page sits above its details (click it to open
 the PDF), and hovering a title in the list previews it. Thumbnails are
 rendered once in the background and cached in `.kherveref/cache/`.
 
+## Citing in Microsoft Word
+
+- **Drag** references into Word (or *Edit ▸ Copy formatted citation /
+  reference*): Word receives "(Smith et al., 2020)" or the reference-list
+  entry in the style chosen under *Edit ▸ Citation style* — APA, Harvard,
+  Chicago, Vancouver, IEEE, Nature, ACS, RSC (CSL styles, see
+  `kherveref/styles/README.md`). LaTeX editors still get `\cite{key}`.
+- **Word's own citation tool:** *Word ▸ Keep Word's source list up to
+  date* writes the library into Word's master source list, so it appears
+  in Word's *References ▸ Insert Citation* and *Bibliography*. Word reads
+  that list when it starts. Sources you created in Word are left alone.
+
 ## Importing from Zotero
 
 *File ▸ Import from Zotero…* copies every reference of a Zotero library

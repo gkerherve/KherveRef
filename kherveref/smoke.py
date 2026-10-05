@@ -18,7 +18,7 @@ def run() -> int:
     import pymupdf
     from PySide6.QtWidgets import QApplication
 
-    from . import bibtex, git_backend, importer, library, store
+    from . import bibtex, cite, git_backend, importer, library, store
     from .mainwindow import MainWindow
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -42,6 +42,8 @@ def run() -> int:
                   or "@misc" in bibtex.to_bibtex(entries.values()),
         "library.bib": (lib.root / store.LIBRARY_BIB).exists(),
         "git": git_backend.commit_all(lib.root, "smoke") is not None,
+        "citation styles": all(
+            cite.format_reference(list(entries.values()), s) for s in cite.STYLES),
     }
     # The throwaway library must not become the user's "last library".
     MainWindow._remember = lambda self, root: None
