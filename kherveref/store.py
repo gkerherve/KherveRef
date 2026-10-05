@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import shutil
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,7 +28,16 @@ LIBRARY_BIB = "library.bib"
 def _atomic_write(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(tmp, path)
+    # Windows refuses to replace a file someone holds open for a moment
+    # (antivirus, the search indexer, a sync client): retry briefly.
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.05)
 
 
 def _json(data) -> str:

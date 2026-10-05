@@ -499,8 +499,9 @@ class MainWindow(QMainWindow):
         if old:
             self._watcher.removePaths(old)
         if lib is not None:
-            self._watcher.addPaths([str(lib.entries_dir),
-                                    str(lib.root / library.COLLECTIONS)])
+            # Folders, not files: on Windows a watched file is held open,
+            # and replacing collections.json then fails ("Access denied").
+            self._watcher.addPaths([str(lib.entries_dir), str(lib.root)])
 
     def _signature(self, entries) -> dict[str, str]:
         return {k: e.modified for k, e in entries.items()}
@@ -519,8 +520,6 @@ class MainWindow(QMainWindow):
         self._reload()
         self.statusBar().showMessage("Library updated from outside the window",
                                      4000)
-        # Some editors replace collections.json, dropping it from the watch.
-        self._watch(self.library)
 
     def _commit(self, message: str) -> None:
         store.write_library_bib(self.library, self.entries.values())
