@@ -148,3 +148,21 @@ def test_delete(win):
 def test_theme_switch_keeps_icons(win):
     win._set_theme("Dark")
     assert not win.act_open.icon().isNull()
+
+
+def test_reveal_request_selects_reference(win, tmp_path):
+    pdf = make_pdf(tmp_path / "p.pdf", ["doi:10.1016/j.apsusc.2020.145000"])
+    win.import_paths([pdf])
+    wait_for_job(win)
+    win._table.selectionModel().clearSelection()
+    win.handle_request({"cmd": "reveal", "paths": [str(pdf)]})
+    assert win.selected_keys() == ["smith2020surface"]
+    stored = win.library.root / win.entries["smith2020surface"].files[0].path
+    assert win.find_by_file(stored) == "smith2020surface"
+
+
+def test_add_request_imports(win, tmp_path):
+    pdf = make_pdf(tmp_path / "p.pdf", ["arXiv:2101.00001"])
+    win.handle_request({"cmd": "add", "paths": [str(pdf)]})
+    wait_for_job(win)
+    assert "martin2021preprint" in win.entries

@@ -274,6 +274,10 @@ class MainWindow(QMainWindow):
         self.act_lookup_review = A("Look up all that &need checking",
                                    self._lookup_all_review, "review")
         self.act_rename_key = A("&Rename key…", self._rename_key, "rename")
+        self.act_annotations = A("Copy PDF &annotations to notes",
+                                 self._annotations_to_notes, "notes", None,
+                                 "Highlights and comments made in KhervePDF "
+                                 "(or any PDF viewer) become notes")
         self.act_new_collection = A("New &collection…",
                                     lambda: self._new_collection(""), "collection_new")
         self.act_online = QAction("Look up details &online", self, checkable=True)
@@ -281,6 +285,13 @@ class MainWindow(QMainWindow):
             QSettings(*SETTINGS).value("online", True, type=bool))
         self.act_online.toggled.connect(
             lambda on: QSettings(*SETTINGS).setValue("online", on))
+
+        self.act_use_khervepdf = QAction("Open PDFs in &KhervePDF", self,
+                                         checkable=True)
+        self.act_use_khervepdf.setChecked(links.use_khervepdf())
+        self.act_use_khervepdf.toggled.connect(
+            lambda on: QSettings(*SETTINGS).setValue(links.USE_KEY, on))
+        self.act_locate_pdf = A("Locate KhervePDF…", self._locate_khervepdf)
 
         self.act_history = A("&History…", self._show_history, "history")
         self.act_remote = A("Set &remote…", self._set_remote, "remote")
@@ -300,7 +311,7 @@ class MainWindow(QMainWindow):
         self._selection_actions = [
             self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
             self.act_delete, self.act_open_file, self.act_show_file,
-            self.act_lookup, self.act_rename_key]
+            self.act_lookup, self.act_rename_key, self.act_annotations]
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -325,11 +336,12 @@ class MainWindow(QMainWindow):
         m.addActions([self.act_find, self.act_rename_key, self.act_delete])
 
         m = mb.addMenu("&Reference")
-        m.addActions([self.act_open_file, self.act_show_file])
+        m.addActions([self.act_open_file, self.act_show_file,
+                      self.act_annotations])
         m.addSeparator()
         m.addActions([self.act_lookup, self.act_lookup_review])
         m.addSeparator()
-        m.addAction(self.act_online)
+        m.addActions([self.act_online, self.act_use_khervepdf, self.act_locate_pdf])
 
         m = mb.addMenu("&View")
         m_theme = m.addMenu("&Theme")
@@ -852,6 +864,54 @@ class MainWindow(QMainWindow):
             self._import_text(md.text())
         ev.acceptProposedAction()
 
+    # ----- requests from other apps (see ipc.py) -----
+
+    def handle_request(self, req: dict) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        cmd, paths = req.get("cmd"), [Path(p) for p in req.get("paths", [])]
+        if cmd == "open" and paths and paths[0].is_dir():
+            self.open_library(paths[0])
+            return
+        if cmd not in ("add", "reveal") or not paths:
+            return
+        if self.library is None:
+            QMessageBox.information(
+                self, "KherveRef",
+                "Open or create a library first, then try again.")
+            return
+        if cmd == "add":
+            self.import_paths(paths, self._target_collection())
+            return
+        key = self.find_by_file(paths[0])
+        if key:
+            self._scope = ALL
+            self._search.clear()
+            self._rebuild_tree()
+            self._select_keys([key])
+        elif QMessageBox.question(
+                self, "KherveRef",
+                f"{paths[0].name} is not in “{self.library.name}”. "
+                "Add it?") == QMessageBox.Yes:
+            self.import_paths(paths[:1], self._target_collection())
+
+    def find_by_file(self, path: Path) -> str | None:
+        """The reference whose attachment is *path* (or an identical copy)."""
+        path = Path(path)
+        try:
+            rel = path.resolve().relative_to(self.library.root.resolve()).as_posix()
+        except ValueError:
+            rel = None
+        for e in self.entries.values():
+            if rel and any(a.path == rel for a in e.files):
+                return e.key
+        try:
+            sha1 = store.sha1_of(path)
+        except OSError:
+            return None
+        return store.DuplicateIndex.build(self.entries.values()).find(Entry(), sha1)
+
     # ------------------------------------------------------------------ #
     # Reference actions                                                    #
     # ------------------------------------------------------------------ #
@@ -940,6 +1000,41 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Open", f"{path} is missing.")
             return
         links.open_document(path, self)
+
+    def _annotations_to_notes(self) -> None:
+        from .pdf_meta import annotations_as_notes
+        changed = []
+        for e in self.selected_entries():
+            for att in e.files:
+                path = store.file_path(self.library, att)
+                if path.suffix.lower() != ".pdf" or not path.exists():
+                    continue
+                text = annotations_as_notes(path)
+                if text and text not in e.notes:
+                    e.notes = (e.notes.rstrip() + "\n\n" + text).strip()
+                    store.save_entry(self.library, e)
+                    changed.append(e.key)
+        if changed:
+            self._commit(f"Notes from PDF annotations: {', '.join(changed)}")
+            self._reload(changed)
+        self.statusBar().showMessage(
+            f"Copied annotations of {len(changed)} PDF(s)" if changed
+            else "No new annotations found", 5000)
+
+    def _locate_khervepdf(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Locate KhervePDF", "",
+            "KhervePDF (KhervePDF.app KhervePDF.exe KhervePDF.py KhervePDF);;"
+            "All files (*)")
+        if not path:
+            return
+        if path.endswith(".app/Contents/MacOS/KhervePDF"):
+            path = path[:-len("/Contents/MacOS/KhervePDF")]
+        if links.set_custom_path(path):
+            self.statusBar().showMessage(f"PDFs open in {path}", 5000)
+        else:
+            QMessageBox.warning(self, "Locate KhervePDF",
+                                f"{path} cannot be run as KhervePDF.")
 
     def _show_in_folder(self) -> None:
         entries = self.selected_entries()

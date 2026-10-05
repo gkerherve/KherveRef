@@ -42,6 +42,7 @@ _GLYPHS: dict[str, str] = {
     "save":         "mdi6.content-save-outline",
     "revert":       "mdi6.undo",
     "collection_new": "mdi6.folder-plus-outline",
+    "notes":        "mdi6.note-text-outline",
 
     # Collections tree
     "all_refs":     "mdi6.book-multiple-outline",
@@ -84,6 +85,7 @@ _FALLBACK_GLYPHS: dict[str, str] = {
     "save":         "fa5s.save",
     "revert":       "fa5s.undo",
     "collection_new": "fa5s.folder-plus",
+    "notes":        "fa5s.sticky-note",
     "all_refs":     "fa5s.book",
     "unfiled":      "fa5s.book-open",
     "collection":   "fa5s.folder",

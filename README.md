@@ -24,6 +24,21 @@ Same look and themes as the rest of the Kherve suite.
 - Drag references onto a collection to file them; drag them into a text
   editor to get `\cite{key}`.
 
+## Working with KhervePDF
+
+PDFs open in KhervePDF when it is installed (or checked out next to this
+repo); *Reference ▸ Locate KhervePDF…* points at another copy. KhervePDF's
+*Tools ▸ Add to KherveRef* and *Show in KherveRef* run
+
+```
+KherveRef --add paper.pdf
+KherveRef --reveal paper.pdf
+```
+
+which hand the request to the KherveRef window already open.
+*Reference ▸ Copy PDF annotations to notes* turns highlights and comments
+into notes on the reference.
+
 ## Libraries
 
 A library is a plain folder, versioned with Git and synced through a Git
@@ -52,7 +67,9 @@ different references without merge conflicts.
 4. Metadata lookup from DOI, arXiv, ISBN and dropped PDFs. *(v0.2)*
 5. KherveTeX: linked `.bib` kept up to date, citation picker, missing-key
    checks, `.bib` bundled inside `.ktexz` files.
-6. KhervePDF: open attachments, "Add to KherveRef", annotations as notes.
+6. KhervePDF: attachments open in KhervePDF; KhervePDF's *Add to KherveRef*
+   and *Show in KherveRef* reach the running window; PDF highlights and
+   comments can be copied into a reference's notes. *(v0.3)*
 7. MCP server for Claude, installers. Zotero import.
 
 ## Run

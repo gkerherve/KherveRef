@@ -134,3 +134,51 @@ def inspect_pdf(path: Path, max_pages: int = 2) -> PdfInfo:
         if not info.has_text:
             info.warnings.append("no text layer (scanned PDF?)")
     return info
+
+
+_ANNOT_KINDS = {"Highlight": "highlight", "Underline": "underline",
+                "StrikeOut": "struck out", "Squiggly": "underline",
+                "Text": "note", "FreeText": "note"}
+
+
+def extract_annotations(path: Path) -> list[tuple[int, str, str, str]]:
+    """(page number, kind, marked text, comment) for each highlight and
+    note in the PDF, in reading order."""
+    import pymupdf
+    out = []
+    try:
+        doc = pymupdf.open(str(path))
+    except Exception:
+        return out
+    with doc:
+        for page in doc:
+            for annot in page.annots() or []:
+                kind = _ANNOT_KINDS.get(annot.type[1])
+                if kind is None:
+                    continue
+                marked = ""
+                if kind not in ("note",):
+                    verts = annot.vertices or []
+                    words = []
+                    for i in range(0, len(verts) - 3, 4):
+                        quad = pymupdf.Quad(verts[i:i + 4]).rect
+                        words.append(page.get_textbox(quad).strip())
+                    marked = " ".join(" ".join(w for w in words if w).split())
+                comment = (annot.info.get("content") or "").strip()
+                if marked or comment:
+                    out.append((page.number + 1, kind, marked, comment))
+    return out
+
+
+def annotations_as_notes(path: Path) -> str:
+    lines = []
+    for page, kind, marked, comment in extract_annotations(path):
+        parts = [f"p. {page}"]
+        if marked:
+            parts.append(f"“{marked}”")
+        if comment:
+            parts.append(("— " if marked else "") + comment)
+        lines.append("• " + " ".join(parts))
+    if not lines:
+        return ""
+    return f"Annotations in {Path(path).name}:\n" + "\n".join(lines)

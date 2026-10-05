@@ -9,9 +9,8 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
-from . import themes
+from . import ipc, themes
 from .icons import app_icon
-from .mainwindow import MainWindow
 
 
 def _install_crash_log() -> None:
@@ -33,14 +32,20 @@ def main() -> int:
     app.setOrganizationName("kherve")
     app.setWindowIcon(app_icon())
 
+    request = ipc.parse_args(sys.argv[1:])
+    if ipc.send_to_running(request):
+        return 0
+
+    from .mainwindow import MainWindow
     settings = QSettings("kherve", "KherveRef")
     theme_name = settings.value("theme_name", "Light") or "Light"
     themes.apply_theme(app, theme_name)
 
     win = MainWindow(theme_name=theme_name)
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    if args and Path(args[0]).is_dir():
-        win.open_library(Path(args[0]))
+    server = ipc.Server(app)
+    server.request.connect(win.handle_request)
+    if request.get("cmd") == "open" and Path(request["paths"][0]).is_dir():
+        win.open_library(Path(request["paths"][0]))
     else:
         win.reopen_last_library()
     win.show()
@@ -49,4 +54,6 @@ def main() -> int:
         fg = win.frameGeometry()
         fg.moveCenter(screen.availableGeometry().center())
         win.move(fg.topLeft())
+    if request.get("cmd") in ("add", "reveal"):
+        win.handle_request(request)
     return app.exec()
