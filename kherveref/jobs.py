@@ -24,10 +24,12 @@ class ImportJob(QThread):
 
     def __init__(self, lib: Library, paths: list[Path] = (),
                  identifiers: list[str] = (), bib_text: str = "",
-                 collection: str = "", online: bool = True, parent=None):
+                 collection: str = "", online: bool = True,
+                 zotero_dir: Path | None = None, parent=None):
         super().__init__(parent)
         self.lib, self.paths, self.identifiers = lib, list(paths), list(identifiers)
         self.online = online
+        self.zotero_dir = zotero_dir
         self.bib_text, self.collection = bib_text, collection
         self._cancel = False
 
@@ -43,6 +45,9 @@ class ImportJob(QThread):
                     break
                 self.progress.emit(i, total, ident)
                 imp.import_identifier(ident)
+            if self.zotero_dir is not None:
+                imp.import_zotero(self.zotero_dir, progress=self.progress.emit,
+                                  cancelled=lambda: self._cancel)
             if self.bib_text:
                 imp.import_bib_text(self.bib_text, "Pasted BibTeX")
             if self.paths:

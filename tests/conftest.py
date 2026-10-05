@@ -34,6 +34,13 @@ QtCore.QSettings = _IsolatedSettings
 
 assert QtCore.QSettings("kherve", "KherveRef").fileName().startswith(_ROOT)
 
+# The same for the Qt-free state file (recent libraries for the MCP server).
+from pathlib import Path  # noqa: E402
+
+from kherveref import state  # noqa: E402
+
+state.state_dir = lambda: Path(_ROOT) / "state"
+
 import pytest  # noqa: E402
 
 

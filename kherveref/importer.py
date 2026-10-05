@@ -27,6 +27,7 @@ ATTACHED = "attached"           # PDF of a reference already in the library
 DUPLICATE = "duplicate"
 REVIEW = "needs checking"       # added, but the metadata is a guess
 FAILED = "failed"
+NOTE = "note"                   # nothing imported; something to know
 
 
 @dataclass
@@ -53,7 +54,7 @@ class Summary:
         for status, label in ((ADDED, "added"), (REVIEW, "added, need checking"),
                               (ATTACHED, "PDFs attached to existing references"),
                               (DUPLICATE, "already in the library"),
-                              (FAILED, "failed")):
+                              (FAILED, "failed"), (NOTE, "notes")):
             n = self.count(status)
             if n:
                 parts.append(f"{n} {label}")
@@ -204,6 +205,80 @@ class Importer:
         if dup:
             return self._record(Outcome(source, DUPLICATE, dup.key))
         return self._add(e, source, review=not e.title, pdf=pdf)
+
+    # ----- Zotero -----
+
+    def import_zotero(self, data_dir: Path,
+                      progress: Callable[[int, int, str], None] | None = None,
+                      cancelled: Callable[[], bool] | None = None) -> Summary:
+        """Every reference of a Zotero library, with its PDFs, collections
+        (recreated, or matched by name on a second import), tags and
+        notes."""
+        from . import zotero
+        zlib = zotero.read_library(data_dir)
+        cols = store.load_collections(self.lib)
+        by_name = {(c.name, c.parent): c.id for c in cols}
+        ids: dict[str, str] = {}
+        pending = list(zlib.collections)
+        # Parents before children, whatever order Zotero stored them in.
+        while pending:
+            progressed = False
+            for item in list(pending):
+                zkey, name, zparent = item
+                if zparent and zparent not in ids and \
+                        any(p[0] == zparent for p in pending):
+                    continue
+                parent = ids.get(zparent, "")
+                cid = by_name.get((name, parent))
+                if cid is None:
+                    cid = store.new_collection_id()
+                    cols.append(store.Collection(cid, name, parent))
+                    by_name[(name, parent)] = cid
+                ids[zkey] = cid
+                pending.remove(item)
+                progressed = True
+            if not progressed:      # a parent loop: file the rest at top level
+                for zkey, name, _ in pending:
+                    ids[zkey] = by_name.setdefault((name, ""), store.new_collection_id())
+                    if not any(c.id == ids[zkey] for c in cols):
+                        cols.append(store.Collection(ids[zkey], name))
+                break
+        store.save_collections(self.lib, cols)
+
+        total = len(zlib.items)
+        for i, item in enumerate(zlib.items):
+            if cancelled and cancelled():
+                break
+            e = item.entry
+            if progress:
+                progress(i, total, e.title[:60] or e.key)
+            source = f"Zotero: {e.title[:60]}"
+            try:
+                sha1 = store.sha1_of(item.pdfs[0]) if item.pdfs else ""
+            except OSError:
+                sha1 = ""
+            dup = self._existing(e, sha1)
+            if dup:
+                self._record(Outcome(source, DUPLICATE, dup.key))
+                continue
+            e.collections = [ids[k] for k in item.collection_keys if k in ids]
+            store.add_entry(self.lib, e, self.entries)
+            for pdf in item.pdfs:
+                try:
+                    store.attach_file(self.lib, e, pdf)
+                except OSError as err:
+                    self._record(Outcome(str(pdf), NOTE, e.key, str(err)))
+            store.save_entry(self.lib, e)
+            self.dups.add(e)
+            self._record(Outcome(source, ADDED, e.key,
+                                 f"{len(e.files)} PDF(s)" if e.files else ""))
+        for w in zlib.warnings:
+            self._record(Outcome("Zotero", NOTE, message=w))
+        if progress:
+            progress(total, total, "")
+        if self.summary.changed:
+            store.write_library_bib(self.lib, self.entries.values())
+        return self.summary
 
     # ----- identifiers -----
 

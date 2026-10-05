@@ -115,3 +115,12 @@ def test_doi_link_url_dropped():
     e = csl.from_csl({"type": "article-journal", "title": "T", "DOI": "10.1/X",
                       "URL": "http://dx.doi.org/10.1/x"})
     assert e.url == "" and e.doi == "10.1/X"
+
+
+def test_short_title_duplicate_needs_same_author():
+    idx = store.DuplicateIndex.build([Entry(key="k", title="My thesis", date="2019",
+                                            authors=[Person("Kerherve", "G")])])
+    assert idx.find(Entry(title="My thesis", date="2019",
+                          authors=[Person("Kerherve")])) == "k"
+    assert idx.find(Entry(title="My thesis", date="2019",
+                          authors=[Person("Other")])) is None

@@ -24,6 +24,24 @@ Same look and themes as the rest of the Kherve suite.
 - Drag references onto a collection to file them; drag them into a text
   editor to get `\cite{key}`.
 
+## Importing from Zotero
+
+*File ▸ Import from Zotero…* copies every reference of a Zotero library
+with its PDFs, collections (nested), tags and notes. Zotero's database is
+read from a copy, so Zotero can stay open and is never changed. Importing
+again only adds what is new.
+
+## Claude (MCP)
+
+*Help ▸ Use with Claude (MCP)…* shows the command to register KherveRef's
+MCP server. Claude can then search, add (DOI / arXiv / ISBN / PDF / BibTeX),
+edit, file and export references. The server works on the library folder
+directly; an open KherveRef window picks up its changes.
+
+```
+claude mcp add kherveref -- python -m kherveref.mcp_server
+```
+
 ## Working with KhervePDF
 
 PDFs open in KhervePDF when it is installed (or checked out next to this
@@ -65,12 +83,13 @@ different references without merge conflicts.
    citation keys. *(v0.2)*
 3. Library view: collections, entry editor, drag-and-drop. *(v0.2)*
 4. Metadata lookup from DOI, arXiv, ISBN and dropped PDFs. *(v0.2)*
-5. KherveTeX: linked `.bib` kept up to date, citation picker, missing-key
-   checks, `.bib` bundled inside `.ktexz` files.
+5. KherveTeX (v0.217): *Insert ▸ Citation* picks from your libraries,
+   cited entries travel inside the `.ktex`, *Check citations* lists
+   unknown keys.
 6. KhervePDF: attachments open in KhervePDF; KhervePDF's *Add to KherveRef*
    and *Show in KherveRef* reach the running window; PDF highlights and
    comments can be copied into a reference's notes. *(v0.3)*
-7. MCP server for Claude, installers. Zotero import.
+7. MCP server for Claude and Zotero import *(v0.4)*; installers.
 
 ## Run
 

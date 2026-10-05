@@ -128,6 +128,8 @@ class DuplicateIndex:
     isbn: dict[str, str] = field(default_factory=dict)
     sha1: dict[str, str] = field(default_factory=dict)
     title: dict[str, str] = field(default_factory=dict)
+    # Short titles ("Notes", "My thesis") only count with the first author.
+    title_author: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def build(cls, entries) -> "DuplicateIndex":
@@ -149,6 +151,8 @@ class DuplicateIndex:
         t = normalize_title(e.title)
         if len(t) > 12:
             self.title[f"{t}|{e.year}"] = e.key
+        if t and _first_family(e):
+            self.title_author[f"{t}|{e.year}|{_first_family(e)}"] = e.key
 
     def find(self, e: Entry, sha1: str = "") -> str | None:
         if sha1 and sha1 in self.sha1:
@@ -161,9 +165,16 @@ class DuplicateIndex:
         if e.isbn and _isbn(e.isbn) in self.isbn:
             return self.isbn[_isbn(e.isbn)]
         t = normalize_title(e.title)
-        if len(t) > 12:
-            return self.title.get(f"{t}|{e.year}")
+        if len(t) > 12 and f"{t}|{e.year}" in self.title:
+            return self.title[f"{t}|{e.year}"]
+        if t and _first_family(e):
+            return self.title_author.get(f"{t}|{e.year}|{_first_family(e)}")
         return None
+
+
+def _first_family(e: Entry) -> str:
+    people = e.authors or e.editors
+    return normalize_title(people[0].short()) if people else ""
 
 
 def _isbn(s: str) -> str:

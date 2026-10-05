@@ -43,6 +43,7 @@ _GLYPHS: dict[str, str] = {
     "revert":       "mdi6.undo",
     "collection_new": "mdi6.folder-plus-outline",
     "notes":        "mdi6.note-text-outline",
+    "zotero":       "mdi6.alpha-z-box-outline",
 
     # Collections tree
     "all_refs":     "mdi6.book-multiple-outline",
@@ -58,6 +59,7 @@ _GLYPHS: dict[str, str] = {
 
     # Help
     "about":        "mdi6.information-outline",
+    "claude":       "mdi6.robot-outline",
 }
 
 # Older qtawesome builds lack some mdi6 glyphs.
@@ -86,6 +88,7 @@ _FALLBACK_GLYPHS: dict[str, str] = {
     "revert":       "fa5s.undo",
     "collection_new": "fa5s.folder-plus",
     "notes":        "fa5s.sticky-note",
+    "zotero":       "fa5s.file-import",
     "all_refs":     "fa5s.book",
     "unfiled":      "fa5s.book-open",
     "collection":   "fa5s.folder",
@@ -95,6 +98,7 @@ _FALLBACK_GLYPHS: dict[str, str] = {
     "push":         "fa5s.cloud-upload-alt",
     "pull":         "fa5s.cloud-download-alt",
     "about":        "fa5s.info-circle",
+    "claude":       "fa5s.robot",
 }
 
 DEFAULT_COLOR = "#444444"

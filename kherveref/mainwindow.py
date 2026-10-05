@@ -6,8 +6,8 @@ import datetime
 import json
 from pathlib import Path
 
-from PySide6.QtCore import (QItemSelectionModel, QSettings, QSize, Qt, QThread,
-                            QUrl, Signal)
+from PySide6.QtCore import (QFileSystemWatcher, QItemSelectionModel, QSettings,
+                            QSize, Qt, QThread, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices, QIcon,
                            QKeySequence)
 from PySide6.QtWidgets import (
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import (bibtex, csl, git_backend, icons, importer, library, links,
-               store, themes)
+               state, store, themes)
 from . import version_string
 from .editor import EntryEditor
 from .icons import icon
@@ -127,6 +127,14 @@ class MainWindow(QMainWindow):
         self._job: QThread | None = None
         self._progress: QProgressDialog | None = None
         self._scope = ALL
+
+        # Changes made outside this window (the MCP server, a git pull in
+        # a terminal) are picked up from the library folder.
+        self._watcher = QFileSystemWatcher(self)
+        self._watch_timer = QTimer(self, singleShot=True, interval=600)
+        self._watcher.directoryChanged.connect(lambda _p: self._watch_timer.start())
+        self._watcher.fileChanged.connect(lambda _p: self._watch_timer.start())
+        self._watch_timer.timeout.connect(self._external_change)
 
         self.setAcceptDrops(True)
         self.resize(1360, 820)
@@ -247,6 +255,10 @@ class MainWindow(QMainWindow):
                             "add_doi", "Ctrl+Shift+D")
         self.act_import_bib = A("&Import .bib / CSL-JSON…", self._import_bib_dialog,
                                 "import_bib")
+        self.act_import_zotero = A("Import from &Zotero…", self._import_zotero,
+                                   "zotero", None,
+                                   "Every reference, PDF, collection, tag and note "
+                                   "of a Zotero library")
         self.act_new_ref = A("New &empty reference", self._new_reference,
                              "add_ref", QKeySequence.New)
         self.act_export_biblatex = A("Export &BibLaTeX…",
@@ -300,10 +312,12 @@ class MainWindow(QMainWindow):
         self.act_push = A("P&ush", lambda: self._run_git(git_backend.push, "Push"),
                           "push", None, "Send this library's changes to its Git remote")
         self.act_about = A("&About KherveRef", self._about, "about")
+        self.act_claude = A("Use with &Claude (MCP)…", self._show_mcp_help, "claude")
 
         self._library_actions = [
             self.act_close, self.act_add_pdfs, self.act_import_folder,
-            self.act_add_id, self.act_import_bib, self.act_new_ref,
+            self.act_add_id, self.act_import_bib, self.act_import_zotero,
+            self.act_new_ref,
             self.act_export_biblatex, self.act_export_bibtex, self.act_export_csl,
             self.act_paste, self.act_find, self.act_lookup_review,
             self.act_new_collection, self.act_history, self.act_remote,
@@ -322,7 +336,7 @@ class MainWindow(QMainWindow):
         m.addAction(self.act_close)
         m.addSeparator()
         m.addActions([self.act_add_pdfs, self.act_import_folder, self.act_add_id,
-                      self.act_import_bib, self.act_new_ref])
+                      self.act_import_bib, self.act_import_zotero, self.act_new_ref])
         m.addSeparator()
         m.addActions([self.act_export_biblatex, self.act_export_bibtex,
                       self.act_export_csl])
@@ -361,6 +375,7 @@ class MainWindow(QMainWindow):
         m.addActions([self.act_remote, self.act_pull, self.act_push])
 
         self._help_menu = mb.addMenu("&Help")
+        self._help_menu.addAction(self.act_claude)
         self._help_menu.addAction(self.act_about)
 
     def _build_toolbar(self) -> None:
@@ -420,6 +435,7 @@ class MainWindow(QMainWindow):
         self.library = lib
         self._remember(lib.root)
         self._scope = ALL
+        self._watch(lib)
         self._reload()
         store.write_library_bib(lib, self.entries.values())
         self._refresh()
@@ -432,6 +448,7 @@ class MainWindow(QMainWindow):
 
     def close_library(self) -> None:
         self._flush_editor()
+        self._watch(None)
         self.library = None
         self.entries = {}
         self.collections = []
@@ -445,6 +462,7 @@ class MainWindow(QMainWindow):
         return [val] if isinstance(val, str) else list(val)
 
     def _remember(self, root: Path) -> None:
+        state.remember_library(root)
         s = QSettings(*SETTINGS)
         recent = [p for p in self._recent() if p != str(root)]
         s.setValue("recent_libraries", [str(root)] + recent[:MAX_RECENT - 1])
@@ -475,6 +493,34 @@ class MainWindow(QMainWindow):
         self._select_keys(keep)
         if not keep:
             self._editor.set_entry(None)
+
+    def _watch(self, lib) -> None:
+        old = self._watcher.files() + self._watcher.directories()
+        if old:
+            self._watcher.removePaths(old)
+        if lib is not None:
+            self._watcher.addPaths([str(lib.entries_dir),
+                                    str(lib.root / library.COLLECTIONS)])
+
+    def _signature(self, entries) -> dict[str, str]:
+        return {k: e.modified for k, e in entries.items()}
+
+    def _external_change(self) -> None:
+        if self.library is None or self._job is not None:
+            return
+        if self._editor.is_dirty():
+            self._watch_timer.start(2000)   # never discard edits in progress
+            return
+        on_disk = store.load_entries(self.library)
+        cols = store.load_collections(self.library)
+        if self._signature(on_disk) == self._signature(self.entries) and \
+                cols == self.collections:
+            return      # our own save
+        self._reload()
+        self.statusBar().showMessage("Library updated from outside the window",
+                                     4000)
+        # Some editors replace collections.json, dropping it from the watch.
+        self._watch(self.library)
 
     def _commit(self, message: str) -> None:
         store.write_library_bib(self.library, self.entries.values())
@@ -747,6 +793,30 @@ class MainWindow(QMainWindow):
             "Bibliographies (*.bib *.bibtex *.json);;All files (*)")
         if files:
             self.import_paths([Path(f) for f in files], self._target_collection())
+
+    def _import_zotero(self) -> None:
+        from . import zotero
+        d = zotero.default_data_dir()
+        if not zotero.is_data_dir(d):
+            chosen = QFileDialog.getExistingDirectory(
+                self, "Zotero data folder (the one holding zotero.sqlite)",
+                str(Path.home()))
+            if not chosen:
+                return
+            d = Path(chosen)
+            if not zotero.is_data_dir(d):
+                QMessageBox.warning(self, "Import from Zotero",
+                                    f"There is no zotero.sqlite in {d}.\n\n"
+                                    "Zotero ▸ Settings ▸ Advanced ▸ Files and "
+                                    "Folders shows where it is.")
+                return
+        elif QMessageBox.question(
+                self, "Import from Zotero",
+                f"Import the Zotero library in {d}?\n\nReferences, PDFs, "
+                "collections, tags and notes are copied; Zotero itself is "
+                "not changed.") != QMessageBox.Yes:
+            return
+        self._start_import(ImportJob(self.library, zotero_dir=d))
 
     def _add_identifiers(self) -> None:
         text, ok = QInputDialog.getMultiLineText(
@@ -1226,6 +1296,34 @@ class MainWindow(QMainWindow):
         if self.library is not None:
             self._rebuild_tree()
             self._model.layoutChanged.emit()
+
+    def _show_mcp_help(self) -> None:
+        import sys as _sys
+        if getattr(_sys, "frozen", False):
+            cmd = [_sys.executable, "--mcp-server"]
+        else:
+            cmd = [_sys.executable, "-m", "kherveref.mcp_server"]
+        lib = ["--library", str(self.library.root)] if self.library else []
+        cfg = json.dumps({"mcpServers": {"kherveref": {
+            "command": cmd[0], "args": cmd[1:] + lib}}}, indent=2)
+        cli = "claude mcp add kherveref -- " + " ".join(
+            f'"{c}"' if " " in c else c for c in cmd + lib)
+        box = QMessageBox(self)
+        box.setWindowTitle("Use KherveRef with Claude")
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            "Claude can search, add, edit and export your references through "
+            "KherveRef's MCP server. It works on the library folder directly, "
+            "so this window need not be open.<br><br>"
+            "<b>Claude Code</b> — run:<br><code>" + cli.replace("&", "&amp;")
+            .replace("<", "&lt;") + "</code><br><br>"
+            "<b>Claude Desktop</b> — add to claude_desktop_config.json:"
+            "<pre>" + cfg.replace("&", "&amp;").replace("<", "&lt;") + "</pre>")
+        copy = box.addButton("Copy Claude Code command", QMessageBox.ActionRole)
+        box.addButton(QMessageBox.Close)
+        box.exec()
+        if box.clickedButton() is copy:
+            QApplication.clipboard().setText(cli)
 
     def _about(self) -> None:
         QMessageBox.about(
