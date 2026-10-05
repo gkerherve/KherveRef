@@ -110,6 +110,9 @@ class CoversView(QListView):
         self.setWordWrap(True)
         self.setMouseTracking(True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        # Select whole references, as the list does: the details pane,
+        # Delete and the menus all act on selected rows.
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragOnly)
         self.setItemDelegate(CoverDelegate(self, thumbnails, entry_at))

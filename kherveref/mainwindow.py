@@ -875,9 +875,13 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def selected_keys(self) -> list[str]:
-        rows = self._table.selectionModel().selectedRows()
-        return [self._model.entry(self._proxy.mapToSource(ix).row()).key
-                for ix in rows]
+        """Keys of the selected references, in view order. Rows are read
+        from any selected cell: the Covers view selects one cell (the
+        title column), the list whole rows."""
+        rows = sorted({ix.row() for ix in
+                       self._table.selectionModel().selectedIndexes()})
+        return [self._model.entry(self._proxy.mapToSource(
+            self._proxy.index(r, 0)).row()).key for r in rows]
 
     def selected_entries(self) -> list[Entry]:
         return [self.entries[k] for k in self.selected_keys() if k in self.entries]
@@ -941,7 +945,8 @@ class MainWindow(QMainWindow):
         """Right-click acts on the reference under the mouse, selecting
         it first unless it is already part of the selection."""
         ix = view.indexAt(pos)
-        if ix.isValid() and not view.selectionModel().isRowSelected(ix.row()):
+        if ix.isValid() and ix.row() not in {
+                i.row() for i in view.selectionModel().selectedIndexes()}:
             view.selectionModel().select(
                 ix, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
             view.selectionModel().setCurrentIndex(ix, QItemSelectionModel.NoUpdate)

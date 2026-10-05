@@ -73,3 +73,36 @@ def test_icons_are_phosphor_with_accent(qapp):
     assert not icons.icon("add_pdf").isNull()
     assert icons.icon_spec(icons.icon("add_pdf")) == ("add_pdf", None)
     assert "add_pdf" in icons.ACCENTED and icons._PHOSPHOR["add_pdf"].startswith("ph.")
+
+
+def test_clicking_a_cover_works_like_the_list(win, tmp_path, monkeypatch):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    for key in ("k1", "k2"):
+        _entry_with_pdf(win.library, tmp_path, key)
+    win._reload([])
+    win.resize(1200, 800)
+    win.show()
+    win._set_view("covers", remember=False)
+    QApplication.processEvents()
+    cov = win._covers
+    ix = cov.model().index(1, cov.modelColumn())
+    rect = cov.visualRect(ix)
+    QTest.mouseClick(cov.viewport(), Qt.LeftButton, Qt.NoModifier, rect.center())
+    QApplication.processEvents()
+    key = win._entry_at(ix).key
+    assert win.selected_keys() == [key]
+    assert win._editor.entry is not None and win._editor.entry.key == key
+    assert win.act_delete.isEnabled()
+
+    # Ctrl/Cmd-click adds a second cover to the selection.
+    other = cov.model().index(0, cov.modelColumn())
+    QTest.mouseClick(cov.viewport(), Qt.LeftButton, Qt.ControlModifier,
+                     cov.visualRect(other).center())
+    assert len(win.selected_keys()) == 2
+
+    # Right-click menu and Delete act on the cover under the mouse.
+    monkeypatch.setattr(win, "_table_menu", lambda pos: None)
+    win._context_menu(cov, cov.visualRect(ix).center())
+    win._delete_selected()
+    assert key not in win.entries
