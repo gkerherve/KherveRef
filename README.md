@@ -6,6 +6,24 @@ BibLaTeX export.
 
 Same look and themes as the rest of the Kherve suite.
 
+## Adding references
+
+- **Drop PDFs** (or a whole folder) onto the window, or use *Add PDFs…* /
+  *Import folder…*. KherveRef reads each PDF's DOI, arXiv id or ISBN and
+  fetches the full details online (doi.org / Crossref, arXiv,
+  OpenLibrary). Without an identifier it searches Crossref by the title
+  and only accepts a near-exact match.
+- When nothing is found (or you are offline) the reference is still
+  created from what the PDF says and listed under **Needs checking**;
+  *Look up details* tries again later.
+- The same PDF, DOI, arXiv id or ISBN is never added twice; a PDF for a
+  reference you already have is attached to it.
+- **Paste or drop** DOIs, arXiv ids, ISBNs or BibTeX text, or import
+  `.bib` and CSL-JSON files (PDFs named in JabRef/Zotero `file` fields
+  come along).
+- Drag references onto a collection to file them; drag them into a text
+  editor to get `\cite{key}`.
+
 ## Libraries
 
 A library is a plain folder, versioned with Git and synced through a Git
@@ -14,6 +32,7 @@ remote (GitHub or any other host):
 ```
 MyLibrary/
   library.json        name, format, BibTeX dialect
+  library.bib         generated after every change (classic BibTeX, for KherveTeX)
   collections.json    collections
   entries/<key>.json  one reference per file
   files/<key>.pdf     attached PDFs
@@ -25,11 +44,12 @@ different references without merge conflicts.
 
 ## Roadmap
 
-1. **Application shell** — themed window, new/open library, Git history,
+1. Application shell — themed window, new/open library, Git history,
    remote, pull/push. *(v0.1)*
-2. Core model: entries, BibLaTeX import/export, citation keys, search index.
-3. Library view: collections, entry editor, drag-and-drop PDFs / `.bib` / DOIs.
-4. Metadata lookup from DOI (Crossref), arXiv, ISBN, and from dropped PDFs.
+2. Core model: entries, BibLaTeX / BibTeX / CSL-JSON import and export,
+   citation keys. *(v0.2)*
+3. Library view: collections, entry editor, drag-and-drop. *(v0.2)*
+4. Metadata lookup from DOI, arXiv, ISBN and dropped PDFs. *(v0.2)*
 5. KherveTeX: linked `.bib` kept up to date, citation picker, missing-key
    checks, `.bib` bundled inside `.ktexz` files.
 6. KhervePDF: open attachments, "Add to KherveRef", annotations as notes.

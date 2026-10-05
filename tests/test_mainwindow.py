@@ -1,34 +1,150 @@
-from kherveref import library
+import pytest
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+
+from kherveref import fetch, git_backend, jobs, library, store
 from kherveref.mainwindow import MainWindow
+from kherveref.table_model import ALL, REVIEW
+from helpers import FakeNet, make_pdf
+
+
+@pytest.fixture
+def git_identity(monkeypatch):
+    for k, v in (("GIT_AUTHOR_NAME", "T"), ("GIT_COMMITTER_NAME", "T"),
+                 ("GIT_AUTHOR_EMAIL", "t@x"), ("GIT_COMMITTER_EMAIL", "t@x")):
+        monkeypatch.setenv(k, v)
+
+
+@pytest.fixture
+def win(qapp, tmp_path, monkeypatch, git_identity):
+    monkeypatch.setattr(fetch, "http_get", FakeNet())
+    monkeypatch.setattr(jobs.SummaryDialog, "exec", lambda self: 0)
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(lambda *a, **k: QMessageBox.Yes))
+    lib = library.create_library(tmp_path / "lib", "Thesis refs")
+    git_backend.commit_all(lib.root, "Create")
+    w = MainWindow()
+    w.open_library(lib.root)
+    yield w
+    w.close()
+
+
+def wait_for_job(w):
+    while w._job is not None:
+        QApplication.processEvents()
 
 
 def test_starts_on_start_page(qapp):
-    win = MainWindow()
-    assert win._stack.currentIndex() == 0
-    assert not win.act_push.isEnabled()
-    assert "no library" in win.windowTitle()
+    w = MainWindow()
+    assert w._stack.currentIndex() == 0
+    assert not w.act_push.isEnabled() and not w.act_add_pdfs.isEnabled()
+    assert "no library" in w.windowTitle()
 
 
-def test_open_library_shows_it_and_remembers(qapp, tmp_path):
-    library.create_library(tmp_path, "Thesis refs")
-    win = MainWindow()
-    assert win.open_library(tmp_path)
+def test_open_library_and_reopen(win):
     assert win._stack.currentIndex() == 1
     assert win.windowTitle().endswith("Thesis refs")
-    assert win.act_push.isEnabled()
-    assert "0 references" in win._status.text()
-
+    assert win.act_add_pdfs.isEnabled()
+    assert (win.library.root / "library.bib").exists()
     again = MainWindow()
     again.reopen_last_library()
-    assert again.library is not None and again.library.root == tmp_path
-
-    again.close_library()
-    third = MainWindow()
-    third.reopen_last_library()
-    assert third.library is None
+    assert again.library.root == win.library.root
 
 
-def test_theme_switch_keeps_icons(qapp):
-    win = MainWindow()
+def test_drop_pdf_becomes_reference(win, tmp_path):
+    pdf = make_pdf(tmp_path / "p.pdf", ["doi:10.1016/j.apsusc.2020.145000"])
+    win.import_paths([pdf])
+    wait_for_job(win)
+    assert list(win.entries) == ["smith2020surface"]
+    assert win._proxy.rowCount() == 1
+    assert win.selected_keys() == ["smith2020surface"]
+    assert win._editor.entry.title == "Surface chemistry of titania films"
+    assert git_backend.history(win.library.root)[0][3].startswith("Import: 1 added")
+    assert "smith2020surface" in (win.library.root / "library.bib").read_text()
+
+
+def test_folder_import_and_review_scope(win, tmp_path):
+    folder = tmp_path / "f"
+    folder.mkdir()
+    make_pdf(folder / "a.pdf", ["doi:10.1016/j.apsusc.2020.145000"])
+    make_pdf(folder / "b.pdf", ["plain text with no identifiers at all " * 3],
+             big="Unknown Internal Memo About Things")
+    win.import_paths([folder])
+    wait_for_job(win)
+    assert len(win.entries) == 2
+    win._scope = REVIEW
+    win._apply_scope()
+    assert win._proxy.rowCount() == 1
+
+
+def test_identifiers_and_bibtex_text(win):
+    win._import_text("arXiv:2101.00001\n978-0-306-40615-7")
+    wait_for_job(win)
+    win._import_text("@article{mine2020, title={Pasted entry title}, year=2020}")
+    wait_for_job(win)
+    assert {"martin2021preprint", "sagan1980book", "mine2020"} <= set(win.entries)
+
+
+def test_edit_and_save(win):
+    win._import_text("10.1016/j.apsusc.2020.145000")
+    wait_for_job(win)
+    ed = win._editor
+    ed._widgets["title"].setPlainText("Edited title")
+    assert ed.is_dirty()
+    ed.save()
+    assert store.load_entries(win.library)["smith2020surface"].title == "Edited title"
+    assert git_backend.history(win.library.root)[0][3] == "Edit smith2020surface"
+
+
+def test_new_reference_gets_key_on_save(win):
+    win._new_reference()
+    ed = win._editor
+    ed._widgets["title"].setPlainText("Handmade reference")
+    ed._widgets["authors"].setPlainText("Curie, Marie")
+    ed._widgets["date"].setText("1903")
+    ed.save()
+    assert "curie1903handmade" in win.entries
+
+
+def test_collections_and_search(win):
+    win._import_text("10.1016/j.apsusc.2020.145000\narXiv:2101.00001")
+    wait_for_job(win)
+    c = store.Collection(store.new_collection_id(), "Chapter 1")
+    win.collections.append(c)
+    store.save_collections(win.library, win.collections)
+    win._rebuild_tree()
+    win._add_keys_to_collection(["smith2020surface"], c.id)
+    win._scope = c.id
+    win._apply_scope()
+    assert win._proxy.rowCount() == 1
+    win._scope = ALL
+    win._apply_scope()
+    win._search.setText("graphene")
+    assert win._proxy.rowCount() == 1
+    win._search.setText("")
+    assert win._proxy.rowCount() == 2
+
+
+def test_export_biblatex(win, tmp_path, monkeypatch):
+    win._import_text("10.1016/j.apsusc.2020.145000")
+    wait_for_job(win)
+    out = tmp_path / "out.bib"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(out), "")))
+    win._table.selectionModel().clearSelection()
+    win._export("biblatex")
+    text = out.read_text()
+    assert "journaltitle" in text and "@article{smith2020surface," in text
+
+
+def test_delete(win):
+    win._import_text("10.1016/j.apsusc.2020.145000")
+    wait_for_job(win)
+    win._select_keys(["smith2020surface"])
+    win._delete_selected()
+    assert win.entries == {} and win._proxy.rowCount() == 0
+    assert git_backend.history(win.library.root)[0][3] == "Delete smith2020surface"
+
+
+def test_theme_switch_keeps_icons(win):
     win._set_theme("Dark")
     assert not win.act_open.icon().isNull()
