@@ -74,11 +74,17 @@ class Server(QObject):
             self._buffers[id(sock)] = bytearray()
             sock.readyRead.connect(self._read)
             sock.disconnected.connect(self._dropped)
+            # On Windows the whole request can arrive before readyRead
+            # is connected, and then it is never signalled.
+            self._consume(sock)
 
     def _read(self):
-        sock = self.sender()
+        self._consume(self.sender())
+
+    def _consume(self, sock) -> None:
         buf = self._buffers.setdefault(id(sock), bytearray())
-        buf.extend(bytes(sock.readAll()))
+        if sock.bytesAvailable():
+            buf.extend(bytes(sock.readAll()))
         if b"\n" in buf:
             line = bytes(buf).partition(b"\n")[0]
             buf.clear()
@@ -89,5 +95,6 @@ class Server(QObject):
 
     def _dropped(self):
         sock = self.sender()
+        self._consume(sock)
         self._buffers.pop(id(sock), None)
         sock.deleteLater()
