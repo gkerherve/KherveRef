@@ -105,3 +105,27 @@ def test_clicking_a_cover_works_like_the_list(win, tmp_path, monkeypatch):
     win._context_menu(cov, cov.visualRect(ix).center())
     win._delete_selected()
     assert key not in win.entries
+
+
+def test_drawn_cover_title_never_overlaps_type_label(qapp):
+    from PySide6.QtCore import QRect, Qt
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    from kherveref.covers import IMG_H, CARD_W, placeholder_layout
+    img = QRect(0, 0, CARD_W, IMG_H)
+    base = QFont()
+    big = QFont(base)
+    big.setPointSizeF(base.pointSizeF() * 1.05)
+    big.setBold(True)
+    long = ("A consistent and accurate ab initio parametrization of density "
+            "functional dispersion correction (DFT-D) for the 94 elements H-Pu "
+            "with many more words to make it far too long for any cover card")
+    for label in ("JOURNAL ARTICLE", "CONFERENCE PAPER IN PROCEEDINGS"):
+        lab, tit, font, text = placeholder_layout(img, base, label, big, long)
+        assert tit.top() > lab.bottom()
+        assert tit.bottom() <= img.bottom()
+        used = QFontMetrics(font).boundingRect(
+            QRect(0, 0, tit.width(), 10_000), Qt.AlignHCenter | Qt.TextWordWrap, text)
+        assert used.height() <= tit.height()
+    _, _, font, text = placeholder_layout(img, base, "BOOK", big, "The TeXbook")
+    assert text == "The TeXbook" and font.pointSizeF() == big.pointSizeF()

@@ -146,7 +146,7 @@ are tidied into this layout the first time they are opened.
    and *Show in KherveRef* reach the running window; PDF highlights and
    comments can be copied into a reference's notes. *(v0.3)*
 7. MCP server for Claude and Zotero import *(v0.4)*; Windows installer and
-   macOS DMGs built and smoke-tested by CI on a `v*` tag.
+   macOS DMGs built and smoke-tested by CI on `v*` / `macos-v*` tags.
 
 ## Run
 
@@ -159,16 +159,32 @@ Python 3.12+, PySide6, PyMuPDF, pygit2, qtawesome.
 
 ## Building installers
 
+Releases are built by GitHub Actions from one tagged commit on `dev`. The
+version is `<__version__>.<commit count>` (what the title bar and
+`KherveRef --version` report):
+
 ```
-pip install -r requirements.txt pyinstaller pillow
-python packaging/generate_icon.py
-pyinstaller KherveRef.spec --noconfirm
-python packaging/smoke_test.py dist/KherveRef.app/Contents/MacOS/KherveRef   # or dist/KherveRef/KherveRef.exe
+V=$(python -c "import kherveref; print(kherveref.release_version())")
+git tag v$V && git tag macos-v$V && git push origin v$V macos-v$V
 ```
 
-Windows: then `ISCC.exe /DMyAppVersion=<version> KherveRef_setup.iss`.
-CI does all of this when a `v<version>` tag is pushed and uploads the
-installers as workflow artifacts.
+- `v*` runs `.github/workflows/windows-build.yml`: tests, then
+  `packaging/build_installer.py` (PyInstaller + Inno Setup) makes
+  `KherveRef-Setup-<ver>.exe` (per-user, no admin), `KherveRef-<ver>-portable.zip`
+  and `KherveRef-Setup.exe`; the app and the installed app are smoke-tested.
+- `macos-v*` runs `.github/workflows/macos-build.yml` on Apple Silicon and
+  Intel: `packaging/build_macos.py` makes ad-hoc-signed
+  `KherveRef-<ver>-macOS-<arch>.dmg` images, smoke-tested.
+
+The workflows upload artifacts only; GitHub releases are made by hand.
+Local build (on the platform you are on):
+
+```
+pip install -r requirements.txt pyinstaller pillow
+python packaging/build_macos.py          # macOS: .app + DMG in dist/
+python packaging/build_installer.py      # Windows: installer + zip in dist/ (needs Inno Setup 6)
+python packaging/smoke_test.py dist/KherveRef.app/Contents/MacOS/KherveRef --version $V
+```
 
 ## License
 

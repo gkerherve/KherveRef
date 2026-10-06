@@ -3,13 +3,46 @@ title, authors and year — easier to recognise a paper by than by key."""
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractItemView, QListView, QStyle, QStyledItemDelegate
 
 from .model import ENTRY_TYPES
 from .table_model import COL_TITLE
 
 CARD_W, IMG_H, TEXT_H, PAD = 150, 200, 62, 10
+
+
+_WRAP = Qt.AlignHCenter | Qt.TextWordWrap
+
+
+def placeholder_layout(img: QRect, label_font: QFont, label: str,
+                       title_font: QFont, title: str):
+    """Lay out a drawn cover (no PDF): the type label at the top, the
+    title in the space *below* it — never overlapping, however long the
+    title or the label. The title font shrinks (to 70%) and then the
+    title is cut with an ellipsis until it fits.
+    Returns (label_rect, title_rect, title_font, title_text)."""
+    inner = img.adjusted(10, 12, -10, -10)
+    lab = QFontMetrics(label_font).boundingRect(inner, _WRAP, label)
+    label_rect = QRect(inner.x(), inner.y(), inner.width(), lab.height())
+    title_rect = QRect(img.x() + 12, label_rect.bottom() + 8,
+                       img.width() - 24, img.bottom() - 12 - label_rect.bottom() - 8)
+    font = QFont(title_font)
+    base = title_font.pointSizeF()
+    text = title[:160]
+
+    def fits(t: str) -> bool:
+        return QFontMetrics(font).boundingRect(
+            QRect(0, 0, title_rect.width(), 10_000), _WRAP, t).height() <= title_rect.height()
+
+    while not fits(text) and font.pointSizeF() > base * 0.7:
+        font.setPointSizeF(font.pointSizeF() - 0.5)
+    if not fits(text):
+        words = text.split()
+        while len(words) > 1 and not fits(" ".join(words) + "…"):
+            words.pop()
+        text = " ".join(words) + "…"
+    return label_rect, title_rect, font, text
 
 
 class CoverDelegate(QStyledItemDelegate):
@@ -58,20 +91,22 @@ class CoverDelegate(QStyledItemDelegate):
             p.setPen(QPen(QColor(pal.mid().color()), 1))
             p.setBrush(card)
             p.drawRoundedRect(QRectF(img).adjusted(0.5, 0.5, -0.5, -0.5), 6, 6)
+            label_font = QFont(option.font)
+            label_font.setPointSizeF(option.font.pointSizeF() * 0.85)
+            title_font = QFont(option.font)
+            title_font.setPointSizeF(option.font.pointSizeF() * 1.05)
+            title_font.setBold(True)
+            label = ENTRY_TYPES.get(e.type, "Reference").upper()
+            label_rect, title_rect, title_font, title = placeholder_layout(
+                img, label_font, label, title_font, e.title or e.key)
+            p.setFont(label_font)
             p.setPen(pal.placeholderText().color())
-            f = QFont(option.font)
-            f.setPointSizeF(f.pointSizeF() * 0.85)
-            p.setFont(f)
-            p.drawText(img.adjusted(10, 12, -10, -10),
-                       Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
-                       ENTRY_TYPES.get(e.type, "Reference").upper())
-            f.setPointSizeF(option.font.pointSizeF() * 1.05)
-            f.setBold(True)
-            p.setFont(f)
+            p.drawText(label_rect, Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
+                       label)
+            p.setFont(title_font)
             p.setPen(pal.text().color())
-            p.drawText(img.adjusted(12, 40, -12, -12),
-                       Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
-                       e.title[:120] or e.key)
+            p.drawText(title_rect, Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
+                       title)
 
         if e is not None:
             text = QRect(r.x() + 4, img.bottom() + 6, r.width() - 8, TEXT_H - 6)
