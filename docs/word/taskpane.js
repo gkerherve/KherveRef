@@ -80,8 +80,15 @@ async function connect() {
     $("library").textContent = s.library
       ? `${s.library} · ${s.count} references` : "no library open in KherveRef";
     const saved = settings.get(STYLE_SETTING);
-    $("style").innerHTML = s.styles.map(
-      (st) => `<option value="${st.id}">${st.label}</option>`).join("");
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const groups = new Map();
+    for (const st of s.styles) {
+      const g = st.group || "Styles";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(`<option value="${esc(st.id)}">${esc(st.label)}</option>`);
+    }
+    $("style").innerHTML = [...groups].map(
+      ([g, opts]) => `<optgroup label="${esc(g)}">${opts.join("")}</optgroup>`).join("");
     $("style").value = saved || s.default_style;
     search();
   } catch (e) {

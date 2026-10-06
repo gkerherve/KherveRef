@@ -18,36 +18,118 @@ from .model import Entry
 
 STYLES_DIR = Path(__file__).resolve().parent / "styles"
 
-# id -> label, in menu order.
-STYLES: dict[str, str] = {
-    "apa": "APA 7th (author–date)",
-    "harvard-cite-them-right": "Harvard (Cite Them Right)",
-    "chicago-author-date": "Chicago (author–date)",
-    "vancouver": "Vancouver (numbered)",
-    "ieee": "IEEE (numbered)",
-    "nature": "Nature (numbered)",
-    "american-chemical-society": "ACS (numbered)",
-    "royal-society-of-chemistry": "RSC (numbered)",
+# Bundled styles (they work offline), by field, in menu order:
+# {group: {id: label}}. Any other journal's style can be added with
+# journal_styles (Edit ▸ Citation style ▸ Find a journal style…).
+GROUPS: dict[str, dict[str, str]] = {
+    "General": {
+        "apa": "APA 7th (author–date)",
+        "harvard-cite-them-right": "Harvard (Cite Them Right)",
+        "chicago-author-date": "Chicago (author–date)",
+        "vancouver": "Vancouver (numbered)",
+        "iso690-author-date-en": "ISO 690 (author–date)",
+    },
+    "Publishers": {
+        "elsevier-with-titles": "Elsevier (numbered)",
+        "elsevier-harvard": "Elsevier Harvard (author–date)",
+        "springer-basic-brackets": "Springer (numbered)",
+        "springer-basic-author-date": "Springer (author–date)",
+        "taylor-and-francis-chicago-author-date": "Taylor & Francis (author–date)",
+        "sage-harvard": "SAGE Harvard (author–date)",
+        "multidisciplinary-digital-publishing-institute": "MDPI (numbered)",
+        "frontiers": "Frontiers (author–date)",
+        "plos": "PLOS (numbered)",
+        "biomed-central": "BioMed Central (numbered)",
+        "copernicus-publications": "Copernicus (author–date)",
+    },
+    "Multidisciplinary journals": {
+        "nature": "Nature (numbered)",
+        "science": "Science (numbered)",
+        "pnas": "PNAS (numbered)",
+        "cell": "Cell (numbered)",
+    },
+    "Chemistry & materials": {
+        "american-chemical-society": "ACS (numbered)",
+        "royal-society-of-chemistry": "RSC (numbered)",
+        "angewandte-chemie": "Angewandte Chemie (numbered)",
+        "advanced-materials": "Advanced Materials / Wiley-VCH (numbered)",
+    },
+    "Physics & earth sciences": {
+        "american-institute-of-physics": "AIP (numbered)",
+        "american-physics-society": "APS – Physical Review (numbered)",
+        "institute-of-physics-numeric": "IOP (numbered)",
+        "american-geophysical-union": "AGU (author–date)",
+    },
+    "Medicine & life sciences": {
+        "american-medical-association": "AMA (numbered)",
+        "bmj": "BMJ (numbered)",
+        "the-lancet": "The Lancet (numbered)",
+    },
+    "Engineering & computing": {
+        "ieee": "IEEE (numbered)",
+        "association-for-computing-machinery": "ACM (numbered)",
+        "springer-lecture-notes-in-computer-science": "Springer LNCS (numbered)",
+    },
+    "Humanities & social sciences": {
+        "modern-language-association": "MLA 9th (author)",
+        "american-sociological-association": "ASA (author–date)",
+        "american-political-science-association": "APSA (author–date)",
+    },
 }
+STYLES: dict[str, str] = {sid: label for g in GROUPS.values() for sid, label in g.items()}
 DEFAULT_STYLE = "apa"
-NUMERIC = {"vancouver", "ieee", "nature", "american-chemical-society",
-           "royal-society-of-chemistry"}
+NUMERIC = {sid for sid, label in STYLES.items() if "(numbered)" in label}
 
 _STYLE_CACHE: dict[str, object] = {}
 # citeproc-py glues the number to the entry in "[1]J. Smith" layouts.
 _LABEL_RE = re.compile(r"^(\[\d+\]|\(\d+\)|\d+\.?)(?=[^\s\d.\])])")
 
 
+def all_styles() -> dict[str, str]:
+    """Bundled styles, then the journal styles added on this computer."""
+    from . import journal_styles
+    out = dict(STYLES)
+    for sid, rec in journal_styles.installed().items():
+        out.setdefault(sid, rec["title"])
+    return out
+
+
+def grouped_styles() -> list[tuple[str, str, str]]:
+    """(group, id, label) for every style: the journals added here
+    first, then the bundled ones by field."""
+    from . import journal_styles
+    added = sorted(journal_styles.installed().items(),
+                   key=lambda kv: kv[1]["title"].lower())
+    return ([("Your journals", sid, rec["title"]) for sid, rec in added
+             if sid not in STYLES]
+            + [(g, sid, label) for g, styles in GROUPS.items()
+               for sid, label in styles.items()])
+
+
+def is_numeric(style_id: str) -> bool:
+    if style_id in STYLES:
+        return style_id in NUMERIC
+    from . import journal_styles
+    rec = journal_styles.installed().get(style_id)
+    return bool(rec and rec.get("format") == "numeric")
+
+
+def style_file(style_id: str) -> Path:
+    if style_id in STYLES:
+        return STYLES_DIR / f"{style_id}.csl"
+    from . import journal_styles
+    path = journal_styles.style_path(style_id)
+    return path if path else STYLES_DIR / f"{DEFAULT_STYLE}.csl"
+
+
 def _style(style_id: str):
     from citeproc import CitationStylesStyle
-    if style_id not in STYLES:
-        style_id = DEFAULT_STYLE
-    if style_id not in _STYLE_CACHE:
+    path = style_file(style_id)
+    if str(path) not in _STYLE_CACHE:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            _STYLE_CACHE[style_id] = CitationStylesStyle(
-                str(STYLES_DIR / f"{style_id}.csl"), validate=False)
-    return _STYLE_CACHE[style_id]
+            _STYLE_CACHE[str(path)] = CitationStylesStyle(str(path), validate=False)
+    return _STYLE_CACHE[str(path)]
 
 
 def _item(e: Entry) -> dict:
@@ -104,7 +186,7 @@ def format_citation(entries: list[Entry], style_id: str = DEFAULT_STYLE) -> str:
     """One citation of *entries*, as text, outside any document. Numbered
     styles have no number without a document, so they fall back to APA's
     author–date form, which reads correctly anywhere."""
-    if style_id in NUMERIC:
+    if is_numeric(style_id):
         style_id = DEFAULT_STYLE
     f = format_document([[e.key for e in entries]], {e.key: e for e in entries},
                         style_id)

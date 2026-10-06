@@ -59,9 +59,12 @@ rendered once in the background and cached in `.kherveref/cache/`.
 
 - **Drag** references into Word (or *Edit ▸ Copy formatted citation /
   reference*): Word receives "(Smith et al., 2020)" or the reference-list
-  entry in the style chosen under *Edit ▸ Citation style* — APA, Harvard,
-  Chicago, Vancouver, IEEE, Nature, ACS, RSC (CSL styles, see
-  `kherveref/styles/README.md`). LaTeX editors still get `\cite{key}`.
+  entry in the style chosen under *Edit ▸ Citation style*: over 35
+  bundled styles grouped by field (APA, Harvard, Chicago, Vancouver,
+  Elsevier, Springer, Nature, Science, ACS, RSC, AIP, APS, IOP, IEEE,
+  AMA, MLA…), plus *Find a journal style…* for any of the ~10,000
+  journal styles in the CSL collection (see `kherveref/styles/README.md`).
+  LaTeX editors still get `\cite{key}`.
 - **Word's own citation tool:** *Word ▸ Keep Word's source list up to
   date* writes the library into Word's master source list, so it appears
   in Word's *References ▸ Insert Citation* and *Bibliography*. Word reads

@@ -106,8 +106,8 @@ class _Handler(BaseHTTPRequestHandler):
         if url.path == "/api/status":
             return self._json({"app": "KherveRef", "version": __version__,
                                "library": name, "count": len(entries),
-                               "styles": [{"id": k, "label": v}
-                                          for k, v in cite.STYLES.items()],
+                               "styles": [{"id": k, "label": v, "group": g}
+                                          for g, k, v in cite.grouped_styles()],
                                "default_style": cite.DEFAULT_STYLE})
         if url.path == "/api/search":
             words = (q.get("q", [""])[0]).lower().split()

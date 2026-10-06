@@ -372,15 +372,10 @@ class MainWindow(QMainWindow):
         self.act_copy_reference = A("Copy formatted r&eference",
                                     self._copy_reference, None, "Ctrl+Alt+R",
                                     "The reference-list entry, in the chosen style")
-        self._style_group = QActionGroup(self)
-        self._style_actions = []
-        current = self.citation_style()
-        for sid, label in cite.STYLES.items():
-            a = QAction(label, self, checkable=True)
-            a.setChecked(sid == current)
-            a.triggered.connect(lambda _=False, s=sid: self._set_style(s))
-            self._style_group.addAction(a)
-            self._style_actions.append(a)
+        self.act_find_style = A("&Find a journal style…", self._find_journal_style,
+                                "find", None,
+                                "Search the ~10,000 journal styles used by Zotero "
+                                "and Mendeley, and add the one you need")
         self.act_word_sync = QAction("Keep &Word's source list up to date", self,
                                      checkable=True)
         self.act_word_sync.setChecked(
@@ -508,8 +503,8 @@ class MainWindow(QMainWindow):
         m.addActions([self.act_undo, self.act_redo])
         m.addSeparator()
         m.addActions([self.act_copy_citation, self.act_copy_reference])
-        m_style = m.addMenu("Citation st&yle")
-        m_style.addActions(self._style_actions)
+        self._style_menu = m.addMenu("Citation st&yle")
+        self._rebuild_style_menu()
         m.addSeparator()
         m.addActions([self.act_copy_key, self.act_copy_cite, self.act_copy_bib,
                       self.act_paste])
@@ -1356,11 +1351,51 @@ class MainWindow(QMainWindow):
 
     def citation_style(self) -> str:
         s = QSettings(*SETTINGS).value("citation_style", cite.DEFAULT_STYLE)
-        return s if s in cite.STYLES else cite.DEFAULT_STYLE
+        return s if s in cite.all_styles() else cite.DEFAULT_STYLE
 
     def _set_style(self, style_id: str) -> None:
         QSettings(*SETTINGS).setValue("citation_style", style_id)
-        self.statusBar().showMessage(f"Citation style: {cite.STYLES[style_id]}", 4000)
+        self._rebuild_style_menu()
+        self.statusBar().showMessage(
+            f"Citation style: {cite.all_styles()[style_id]}", 4000)
+
+    def _rebuild_style_menu(self) -> None:
+        """Bundled styles by field, then the journals added here, then
+        Find a journal style…; the current one ticked (its group too)."""
+        from . import journal_styles
+        m = self._style_menu
+        m.clear()
+        group = QActionGroup(m)
+        current = self.citation_style()
+
+        def add(menu, sid, label):
+            a = menu.addAction(label)
+            a.setCheckable(True)
+            a.setChecked(sid == current)
+            a.triggered.connect(lambda _=False, s=sid: self._set_style(s))
+            group.addAction(a)
+
+        added = journal_styles.installed()
+        if added:
+            m.addSection("Your journals")
+            for sid, rec in sorted(added.items(), key=lambda kv: kv[1]["title"].lower()):
+                add(m, sid, rec["title"])
+            m.addSeparator()
+        for name, styles in cite.GROUPS.items():
+            sub = m.addMenu(("✓ " if current in styles else "") + name)
+            for sid, label in styles.items():
+                add(sub, sid, label)
+        m.addSeparator()
+        m.addAction(self.act_find_style)
+
+    def _find_journal_style(self) -> None:
+        from .style_dialog import JournalStyleDialog
+        dlg = JournalStyleDialog(self)
+        dlg.exec()
+        if dlg.chosen:
+            self._set_style(dlg.chosen)
+        else:
+            self._rebuild_style_menu()
 
     def _formatted_citation(self, entries) -> tuple[str, str, str]:
         text = cite.format_citation(entries, self.citation_style())
@@ -1394,7 +1429,7 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setMimeData(md)
         self.statusBar().showMessage(
             f"Copied {len(refs)} reference{'s' * (len(refs) != 1)} "
-            f"({cite.STYLES[self.citation_style()]})", 4000)
+            f"({cite.all_styles()[self.citation_style()]})", 4000)
 
     def _toggle_word_sync(self, on: bool) -> None:
         QSettings(*SETTINGS).setValue("word_sync", on)
