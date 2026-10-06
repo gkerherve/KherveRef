@@ -30,6 +30,20 @@ ADDIN_ID = "8f4c2a61-3b7e-4d2a-9c55-6e1b0a7d4f20"
 FILENAME = "kherveref-manifest.xml"
 _REG_KEY = r"Software\Microsoft\Office\16.0\WEF\Developer"
 
+# Word hides developer add-ins three clicks deep and often shows no ribbon
+# button for them, so every place that mentions the panel spells this out.
+OPEN_STEPS = (
+    "To open the KherveRef panel in Word:\n\n"
+    "1. Quit Word completely (⌘Q on a Mac) and open it again.\n"
+    "2. On the Home tab, click Add-ins (at the far right of the ribbon).\n"
+    "3. Click More Add-ins.\n"
+    "4. At the top of that window, click the My Add-ins tab.\n"
+    "5. Under Developer Add-ins, click KherveRef (then Add, if Word asks).\n\n"
+    "The panel opens on the right of your document. Word may also add a "
+    "Cite button to the Home tab, but not always: Add-ins ▸ More Add-ins ▸ "
+    "My Add-ins ▸ KherveRef always works.\n\n"
+    "Keep KherveRef open while you cite: the panel comes from it.")
+
 
 def mac_wef_dir() -> Path:
     return (Path.home() / "Library" / "Containers" / "com.microsoft.Word"

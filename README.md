@@ -67,7 +67,8 @@ rendered once in the background and cached in `.kherveref/cache/`.
   in Word's *References ▸ Insert Citation* and *Bibliography*. Word reads
   that list when it starts. Sources you created in Word are left alone.
 - **The KherveRef panel in Word:** *Word ▸ Install the KherveRef panel in
-  Word*, restart Word, then *Home ▸ Cite*. Search the library, insert
+  Word*, quit and reopen Word, then *Home ▸ Add-ins ▸ More Add-ins ▸
+  My Add-ins tab ▸ Developer Add-ins ▸ KherveRef*. Search the library, insert
   citations, add a bibliography; *Refresh all* renumbers and reformats
   everything in the chosen style (tested in Word 16.113 on macOS). The
   panel (`docs/word/`) is served by KherveRef itself through a read-only

@@ -19,19 +19,19 @@
   </div>
 
   <main id="main" hidden>
-    <input id="search" type="search" placeholder="Search your library…" autocomplete="off">
+    <input id="search" type="search" title="Type an author, title word, year or citation key to find a reference" placeholder="Search your library…" autocomplete="off">
     <ul id="results" aria-label="References"></ul>
     <div class="row">
-      <button id="cite" class="primary" disabled>Insert citation</button>
+      <button id="cite" class="primary" disabled title="Click in your text first, select one or more references above, then click here to insert the citation">Insert citation</button>
       <span id="selected" class="muted"></span>
     </div>
 
     <section>
       <label for="style">Citation style</label>
-      <select id="style"></select>
+      <select id="style" title="The citation style of this document. Changing it restyles every citation and the bibliography"></select>
       <div class="row">
-        <button id="bibliography">Insert bibliography</button>
-        <button id="refresh">Refresh all</button>
+        <button id="bibliography" title="Click where the reference list should go (usually the end), then here">Insert bibliography</button>
+        <button id="refresh" title="Renumber and reformat every citation and the bibliography, e.g. after moving text or changing style">Refresh all</button>
       </div>
       <p id="status" class="muted" role="status"></p>
     </section>

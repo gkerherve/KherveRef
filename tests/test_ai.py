@@ -369,3 +369,19 @@ def test_refresh_button_finds_newly_installed_model(qapp, monkeypatch):
         assert dlg._others.count() == 1 and dlg._others.itemData(0) == "mistral-nemo:12b"
     finally:
         f.close()
+
+
+def test_toolbar_buttons_explain_themselves(win):
+    from kherveref import mainwindow
+    for name in mainwindow.TOOLBAR_TIPS:
+        tip = getattr(win, name).toolTip()
+        assert "<br>" in tip and len(tip) > 40, name
+    assert "Undo" in win.act_undo.toolTip() and "<br>" in win.act_undo.toolTip()
+
+
+def test_word_open_steps_name_every_click():
+    from kherveref import word_addin
+    steps = word_addin.OPEN_STEPS
+    for click in ("Add-ins", "More Add-ins", "My Add-ins", "Developer Add-ins",
+                  "KherveRef"):
+        assert click in steps

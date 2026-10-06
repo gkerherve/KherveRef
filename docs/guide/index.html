@@ -285,7 +285,17 @@ bibliography up to date in any of KherveRef's styles.</p>
   <li>In KherveRef: <span class="menu">Word ▸ Install the KherveRef panel in Word</span>.
     <br><i>On a Mac</i>, macOS doesn't let apps write into Word's folder, so two Finder windows open:
     drag <code>kherveref-manifest.xml</code> into the <code>wef</code> window. This is needed once.</li>
-  <li>Quit and reopen Word. Click <b>Cite</b> on the Home tab (or <span class="menu">Add-ins ▸ Developer Add-ins ▸ KherveRef</span>).</li>
+  <li>Quit Word completely (<kbd>⌘</kbd><kbd>Q</kbd> on a Mac) and open it again.</li>
+  <li>Open the panel — Word hides it three clicks deep:
+    <ol>
+      <li>On the <b>Home</b> tab, click <b>Add-ins</b> (far right of the ribbon).</li>
+      <li>Click <b>More Add-ins</b>.</li>
+      <li>At the top of that window, click the <b>My Add-ins</b> tab.</li>
+      <li>Under <b>Developer Add-ins</b>, click <b>KherveRef</b> (then <b>Add</b> if Word asks).</li>
+    </ol>
+    The panel opens on the right. Word may also put a <b>Cite</b> button on the Home tab, but not
+    always; the Add-ins route always works. <span class="menu">Word ▸ How to open the panel in Word</span>
+    shows these steps in KherveRef.</li>
   <li>Click in your text, pick one or more references in the panel (click to select, double-click to insert at once), then <b>Insert citation</b>.</li>
   <li>Where the reference list should go, click <b>Insert bibliography</b>.</li>
   <li>Change the style in the panel at any time; <b>Refresh all</b> renumbers and reformats every citation and the bibliography.</li>
@@ -422,6 +432,11 @@ Scanned PDFs without a text layer can't be read: fill them in by hand.</p>
 <h3>The Word panel says “KherveRef isn't running”</h3>
 <p>Open KherveRef, then click <i>try again</i> in the panel. If it persists, reinstall the panel
 (<span class="menu">Word ▸ Install the KherveRef panel in Word</span>) and restart Word.</p>
+<h3>The panel isn't under My Add-ins after reinstalling</h3>
+<p>Word remembers add-ins you removed. Quit Word, open the Finder folder
+<code>~/Library/Containers/com.microsoft.Word/Data/Library/Application Support/Microsoft/Office/16.0/Wef</code>
+(Finder ▸ Go ▸ Go to Folder…), move everything inside it to the Bin — it is only Word's cache — and
+open Word again. Don't touch the lowercase <code>wef</code> folder holding <code>kherveref-manifest.xml</code>.</p>
 <h3>“Operation not permitted” on a Mac</h3>
 <p>macOS protects Word's own folders from other apps. Use the Finder step the installer offers;
 copies you make yourself in Finder are allowed.</p>

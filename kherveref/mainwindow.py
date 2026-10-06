@@ -41,6 +41,38 @@ MAX_RECENT = 8
 SCOPE_ROLE = Qt.UserRole
 
 
+# Icon-only buttons: each tooltip says what the button does and how to use it.
+TOOLBAR_TIPS = {
+    "act_add_pdfs": "Choose one or more PDF files to add to the library. KherveRef "
+                    "reads each one and looks up its title, authors, journal and "
+                    "DOI online. You can also drag PDFs onto the window.",
+    "act_import_folder": "Choose a folder: every PDF and .bib file in it and its "
+                         "subfolders is added. You see the list first and confirm. "
+                         "You can also drag a folder onto the window.",
+    "act_add_id": "Add a paper or book without its PDF: type or paste its DOI, "
+                  "arXiv number, ISBN or publisher link (several, one per line) "
+                  "and KherveRef fetches the details.",
+    "act_delete": "Delete the selected references and their PDFs. Click a "
+                  "reference first (⇧ or ⌘ to select several). Undo brings "
+                  "them back.",
+    "act_undo": "Undo the last change: an import, an edit, a deletion. "
+                "Redo is in the Edit menu.",
+    "act_redo": "Redo the change you just undid.",
+    "act_export_biblatex": "Save references as a .bib file for LaTeX: the ones "
+                           "selected (two or more), otherwise every reference "
+                           "shown. KherveTeX doesn't need this: it reads the "
+                           "library directly.",
+    "act_pull": "Bring in the changes made on your other computers, from the "
+                "library's Git remote (set it in Library ▸ Set remote…).",
+    "act_push": "Send the changes made here to the library's Git remote, so your "
+                "other computers can Pull them.",
+    "act_view_list": "Show the references as a table. Click a column heading to "
+                     "sort; the selected reference's details appear on the right.",
+    "act_view_covers": "Show each reference as the front page of its PDF. Click to "
+                       "select and see its details; double-click to open the PDF.",
+}
+
+
 def _tooltip_with_shortcut(a: QAction) -> None:
     """Icon-only buttons say what they do: "Add PDFs (⇧⌘P)", plus the
     longer explanation when the action has one."""
@@ -51,7 +83,10 @@ def _tooltip_with_shortcut(a: QAction) -> None:
     head = f"{name} ({keys})" if keys else name
     tip = a.toolTip()
     a.setToolTip(head if not tip or tip.replace("&", "") == a.text().replace("&", "")
-                 else f"<b>{html.escape(head)}</b><br>{html.escape(tip)}")
+                 # A fixed-width table: Qt otherwise wraps a long tip
+                 # into a narrow column.
+                 else f"<table width=340><tr><td><b>{html.escape(head)}</b>"
+                      f"<br>{html.escape(tip)}</td></tr></table>")
 
 
 class _GitJob(QThread):
@@ -354,6 +389,8 @@ class MainWindow(QMainWindow):
         self.act_word_send = A("Send library to Word &now", self._send_to_word,
                                "word")
         self.act_word_help = A("Using KherveRef with Word…", self._word_help)
+        self.act_word_open_help = A("How to &open the panel in Word…",
+                                    self._open_word_panel_help)
         self.act_word_panel = A("&Install the KherveRef panel in Word",
                                 self._install_word_panel, "word")
         self.act_word_panel_remove = A("Remove the panel from Word",
@@ -500,7 +537,8 @@ class MainWindow(QMainWindow):
             m_theme.addAction(a)
 
         m = mb.addMenu("&Word")
-        m.addActions([self.act_word_panel, self.act_word_panel_remove])
+        m.addActions([self.act_word_panel, self.act_word_open_help,
+                      self.act_word_panel_remove])
         m.addSeparator()
         m.addActions([self.act_word_sync, self.act_word_send])
         m.addSeparator()
@@ -557,7 +595,12 @@ class MainWindow(QMainWindow):
         self._search.setFixedWidth(280)
         self._search.textChanged.connect(self._search_changed)
         tb.addWidget(self._search)
+        self._search.setToolTip(
+            "Type to show only matching references: authors, title, journal, "
+            "year, citation key or DOI. Clear it to see everything again.")
         self.addToolBar(tb)
+        for a, tip in TOOLBAR_TIPS.items():
+            getattr(self, a).setToolTip(tip)
         for a in tb.actions():
             _tooltip_with_shortcut(a)
 
@@ -721,7 +764,9 @@ class MainWindow(QMainWindow):
             act.setEnabled(self.library is not None and bool(stack))
             what = stack[-1][2] if stack else ""
             act.setText(f"&{word} {what[:50]}" if what else f"&{word}")
-            act.setToolTip(f"{word}: {what}" if what else word)
+            tip = TOOLBAR_TIPS.get(f"act_{word.lower()}")
+            act.setToolTip(tip or word)
+            _tooltip_with_shortcut(act)
 
     def _undo_last(self) -> None:
         self._replay(self._undo, self._redo, "Undo")
@@ -1393,16 +1438,10 @@ class MainWindow(QMainWindow):
         except OSError as e:
             QMessageBox.warning(self, "Word panel", str(e))
             return
-        then = ("Then quit and reopen Word" if word_sources.word_running()
-                else "Then open Word")
-        use = (", and click Cite on the Home tab (or Add-ins ▸ Developer "
-               "Add-ins ▸ KherveRef).\n\nThe panel searches the library open "
-               "here, inserts citations, adds a bibliography and renumbers "
-               "everything when you press Refresh all. Keep KherveRef open "
-               "while you cite: the panel is served by it.")
         if res.done:
             QMessageBox.information(self, "Word panel installed",
-                                    f"The KherveRef panel is registered.\n\n{then}{use}")
+                                    "The KherveRef panel is registered with "
+                                    f"Word.\n\n{word_addin.OPEN_STEPS}")
             return
         QMessageBox.information(
             self, "One step for you in Finder",
@@ -1411,7 +1450,13 @@ class MainWindow(QMainWindow):
             f"• “{res.folder.name}” — Word's add-in folder\n"
             f"• {res.manifest.parent} with {res.manifest.name} selected\n\n"
             f"Drag {res.manifest.name} into the “{res.folder.name}” window "
-            f"(this is needed only once).\n\n{then}{use}")
+            f"(this is needed only once).\n\nThen:\n{word_addin.OPEN_STEPS}")
+
+    def _open_word_panel_help(self) -> None:
+        QMessageBox.information(self, "Open the KherveRef panel in Word",
+                                word_addin.OPEN_STEPS + "\n\nNot listed under "
+                                "Developer Add-ins? Use Word ▸ Install the "
+                                "KherveRef panel in Word first.")
 
     def _remove_word_panel(self) -> None:
         try:
@@ -1434,10 +1479,12 @@ class MainWindow(QMainWindow):
             "References ▸ Bibliography builds the reference list in Word's "
             "styles. Word reads the list when it starts: quit and reopen Word "
             "after changes.\n\n"
-            "3. The KherveRef panel inside Word (Word ▸ Install the KherveRef "
-            "panel, then Home ▸ Cite) inserts live citations and keeps the "
-            "bibliography up to date in any of KherveRef's styles. KherveRef "
-            "serves the panel, so keep it open while citing.")
+            "3. The KherveRef panel inside Word inserts live citations and "
+            "keeps the bibliography up to date in any of KherveRef's styles. "
+            "Install it with Word ▸ Install the KherveRef panel in Word, then "
+            "in Word: Home ▸ Add-ins ▸ More Add-ins ▸ My Add-ins tab ▸ "
+            "Developer Add-ins ▸ KherveRef (Word ▸ How to open the panel in "
+            "Word shows each step).")
 
     def _copy_bib(self, dialect: str) -> None:
         entries = self.selected_entries()
