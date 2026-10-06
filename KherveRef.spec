@@ -10,7 +10,10 @@ Build:
     pip install -r requirements.txt pyinstaller pillow
     python packaging/generate_icon.py
     pyinstaller KherveRef.spec --noconfirm
-    python packaging/smoke_test.py            # checks the result
+
+Normally run through packaging/build_installer.py (Windows) or
+packaging/build_macos.py (macOS), which add the installer / DMG; then
+    python packaging/smoke_test.py <exe> --version <ver>
 
 The same executable is also the MCP server (`KherveRef --mcp-server`).
 """
@@ -21,7 +24,12 @@ from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH)
 sys.path.insert(0, str(ROOT))
-from kherveref import __version__  # noqa: E402
+sys.path.insert(0, str(ROOT / "packaging"))
+from build_info import stamp  # noqa: E402
+
+# "<major>.<minor>.<commit count>": stamps kherveref/BUILD, which the
+# frozen app reads for its title bar, About box and --version.
+VERSION = stamp()
 
 ICO = ROOT / "build" / "KherveRef.ico"
 PNG = ROOT / "build" / "KherveRef.png"
@@ -43,6 +51,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas + [(str(ROOT / "kherveref" / "styles"), "kherveref/styles"),
                    (str(ROOT / "kherveref" / "word_manifest.xml"), "kherveref"),
+                   (str(ROOT / "kherveref" / "BUILD"), "kherveref"),
                    # The Word panel's page, served by KherveRef itself.
                    (str(ROOT / "docs" / "word"), "kherveref/word_panel"),
                    (str(ROOT / "docs" / "guide"), "kherveref/guide")],
@@ -73,11 +82,12 @@ if sys.platform == "darwin":
         name="KherveRef.app",
         icon=str(PNG),
         bundle_identifier="com.kherve.KherveRef",
-        version=__version__,
+        version=VERSION,
         info_plist={
             "CFBundleName": "KherveRef",
             "CFBundleDisplayName": "KherveRef",
-            "CFBundleShortVersionString": __version__,
+            "CFBundleShortVersionString": VERSION,
+            "CFBundleVersion": VERSION,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
             # Double-clicking a library's .kref opens it in KherveRef.

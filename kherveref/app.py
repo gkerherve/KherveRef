@@ -43,6 +43,10 @@ class _FileOpenFilter(QObject):
 
 
 def main() -> int:
+    if "--version" in sys.argv:
+        from . import version_string
+        print(f"KherveRef {version_string()[1:]}", flush=True)
+        return 0
     if "--mcp-server" in sys.argv:
         # The installed app doubles as its MCP server (no window).
         from .mcp_server import main as mcp_main

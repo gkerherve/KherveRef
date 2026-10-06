@@ -77,10 +77,29 @@ commits do not bump. When in doubt, bump. Major only on request.
 
 ## Releases
 
-`git tag v<__version__> && git push origin v<__version__>` runs
-`.github/workflows/release.yml`: tests, PyInstaller (`KherveRef.spec`),
-`packaging/smoke_test.py` on the frozen app (its `--smoke-test` mode and
-the `--mcp-server` handshake), then the Inno Setup installer and the
-DMGs, uploaded as artifacts. Run the smoke test on any local build
-before handing it out. `--smoke-test` must never write the user's
-settings (it disables `MainWindow._remember`).
+Release version = `<__version__>.<commit count>` (e.g. `0.24.32`) — the
+number the title bar shows before `+<sha7>`. A frozen build has no
+`.git`, so `packaging/build_info.py` stamps the git-ignored
+`kherveref/BUILD` (`<count>+<sha7>`) on every build (the spec calls it)
+and `KherveRef --version` prints it. Every commit changes the number:
+commit and push first, then tag that commit for **both** platforms:
+
+    N=$(git rev-list --count HEAD); V=$(python -c "import kherveref;print(kherveref.__version__)").$N
+    git tag v$V && git tag macos-v$V && git push origin v$V macos-v$V
+
+- `v*` → `.github/workflows/windows-build.yml`: tests,
+  `packaging/build_installer.py` (PyInstaller + per-user Inno
+  `packaging/KherveRef.iss`) → `KherveRef-Setup-<ver>.exe`,
+  `KherveRef-<ver>-portable.zip`, stable `KherveRef-Setup.exe`; smoke
+  test of the frozen exe, then a silent install / smoke test of the
+  installed exe / uninstall.
+- `macos-v*` → `.github/workflows/macos-build.yml` on macos-14 (arm64) and
+  macos-15-intel (x86_64): tests, `packaging/build_macos.py` (ad hoc
+  signing inside-out, create-dmg) → `KherveRef-<ver>-macOS-<arch>.dmg`,
+  stable `KherveRef-macOS-<arch>.dmg`, `.sha256`, `.json`; smoke test.
+
+The workflows only upload artifacts; releases are created by hand.
+`packaging/smoke_test.py <exe> --version <ver>` checks `--version`, the
+`--smoke-test` mode and the `--mcp-server` handshake — run it on any
+local build before handing it out. `--smoke-test` must never write the
+user's settings (it disables `MainWindow._remember`).
