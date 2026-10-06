@@ -120,3 +120,19 @@ def test_panel_page_served(server):
         assert False, "path traversal must be refused"
     except urllib.error.HTTPError as e:
         assert e.code == 404
+
+
+def test_panel_errors_are_logged(server):
+    word_server.log_path().unlink(missing_ok=True)
+    req = urllib.request.Request(server + "/log", method="POST",
+                                 data=json.dumps({"message": "update: GeneralException"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        assert json.loads(r.read()) == {"ok": True}
+    assert "update: GeneralException" in word_server.log_path().read_text()
+
+
+def test_panel_adds_a_bibliography_once():
+    js = (ROOT / "docs" / "word" / "taskpane.js").read_text()
+    assert "AUTO_BIB_SETTING" in js and '"References"' in js
+    assert "ensureBibliography(ctx, cites.length)" in js

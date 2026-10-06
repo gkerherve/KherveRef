@@ -5,6 +5,11 @@
  * document order, asks KherveRef (running on this computer) to format
  * them in the chosen style, and writes the results back — so numbering
  * and the reference list always follow the document.
+ *
+ * The first citation also puts a "References" heading and the list at
+ * the end of the document. Only once per document: a list the user
+ * deleted stays deleted (Insert bibliography brings it back, at the
+ * cursor; pressed when there is one already, it moves it there).
  */
 "use strict";
 
@@ -14,7 +19,9 @@ const API = (location.hostname === "127.0.0.1" || location.hostname === "localho
   ? location.origin : "http://127.0.0.1:23120") + "/api";
 const CITE_TAG = "KREF:";
 const BIB_TAG = "KREF-BIB";
+const BIB_HEAD_TAG = "KREF-BIB-HEADING";
 const STYLE_SETTING = "kherveref-style";
+const AUTO_BIB_SETTING = "kherveref-bibliography-added";
 
 const $ = (id) => document.getElementById(id);
 let selected = [];          // keys picked in the list, in click order
@@ -30,6 +37,24 @@ async function api(path, body) {
 }
 
 function status(text) { $("status").textContent = text || ""; }
+
+// Word's errors say little on screen ("GeneralException"); KherveRef keeps
+// the details in word-panel.log for whoever has to fix it.
+function report(what, e) {
+  const info = e && e.debugInfo ? JSON.stringify(e.debugInfo) : "";
+  const msg = `${what}: ${e && (e.name || "")} ${e && e.message} ${info} | Word ${
+    Office.context && Office.context.diagnostics ? Office.context.diagnostics.version : "?"}`;
+  fetch(API + "/log", { method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message: msg }) }).catch(() => {});
+}
+
+async function guarded(what, fn) {
+  try { await fn(); } catch (e) {
+    report(what, e);
+    const where = e.debugInfo && e.debugInfo.errorLocation;
+    status(`Could not ${what}: ${e.message}${where ? ` (${where})` : ""}`);
+  }
+}
 
 function currentStyle() { return $("style").value || "apa"; }
 
@@ -81,7 +106,10 @@ function render(items) {
     li.append(t, m);
     li.title = it.key;
     li.onclick = () => toggle(it.key, li);
-    li.ondblclick = () => { if (!selected.includes(it.key)) toggle(it.key, li); insertCitation(); };
+    li.ondblclick = () => {
+      if (!selected.includes(it.key)) toggle(it.key, li);
+      guarded("insert the citation", insertCitation);
+    };
     ul.append(li);
   }
   if (!items.length) ul.innerHTML = '<li class="m">No matching references.</li>';
@@ -123,22 +151,66 @@ async function insertCitation() {
   await refreshAll();
 }
 
+function newBibliography(cc) {
+  cc.tag = BIB_TAG;
+  cc.title = "KherveRef bibliography";
+  cc.appearance = "BoundingBox";
+  cc.insertText("Bibliography", "Replace");
+}
+
+// A "References" heading and the list: as the last thing in the
+// document, or (where = a range) in place of that range.
+function headedBibliography(ctx, where) {
+  const body = ctx.document.body;
+  const heading = where ? where.insertParagraph("References", "Before")
+                        : body.insertParagraph("References", "End");
+  heading.styleBuiltIn = Word.Style.heading1;
+  const hc = heading.insertContentControl();
+  hc.tag = BIB_HEAD_TAG;
+  hc.title = "KherveRef bibliography heading";
+  const p = heading.insertParagraph("Bibliography", "After");
+  p.styleBuiltIn = Word.Style.normal;
+  newBibliography(p.insertContentControl());
+}
+
+async function ensureBibliography(ctx, citeCount) {
+  if (!citeCount || settings.get(AUTO_BIB_SETTING)) return false;
+  const existing = ctx.document.contentControls.getByTag(BIB_TAG);
+  existing.load("items");
+  await ctx.sync();
+  if (!existing.items.length) {
+    headedBibliography(ctx, null);
+    await ctx.sync();
+  }
+  settings.set(AUTO_BIB_SETTING, "1");
+  return !existing.items.length;
+}
+
 async function insertBibliography() {
   await Word.run(async (ctx) => {
-    const existing = ctx.document.contentControls.getByTag(BIB_TAG);
-    existing.load("items");
+    const old = ctx.document.contentControls;
+    old.load("items/tag");
+    const sel = ctx.document.getSelection();
+    const inside = sel.parentContentControlOrNullObject;
+    inside.load("tag");
     await ctx.sync();
-    if (existing.items.length) {
-      existing.items[0].getRange().select();
-      await ctx.sync();
+    if (!inside.isNullObject && [BIB_TAG, BIB_HEAD_TAG].includes(inside.tag)) {
+      status("The cursor is in the bibliography already. Click where it should go instead.");
       return;
     }
-    const cc = ctx.document.getSelection().insertContentControl();
-    cc.tag = BIB_TAG;
-    cc.title = "KherveRef bibliography";
-    cc.appearance = "BoundingBox";
-    cc.insertText("Bibliography", "Replace");
+    const mine = old.items.filter((c) => [BIB_TAG, BIB_HEAD_TAG].includes(c.tag));
+    // The old heading and list go with the paragraphs they fill.
+    const paras = mine.map((c) => {
+      const ps = c.getRange("Whole").paragraphs;
+      ps.load("items");
+      return ps;
+    });
     await ctx.sync();
+    paras.forEach((ps) => ps.items.forEach((p) => p.delete()));
+    headedBibliography(ctx, sel.paragraphs.getFirst());
+    settings.set(AUTO_BIB_SETTING, "1");
+    await ctx.sync();
+    if (mine.length) status("Bibliography moved here.");
   });
   await refreshAll();
 }
@@ -157,8 +229,14 @@ async function refreshAll() {
       // the control already mixes fonts).
       const keepFont = (c) => ({ name: c.font.name || first.font.name,
                                  size: c.font.size || first.font.size });
-      const cites = all.items.filter((c) => (c.tag || "").startsWith(CITE_TAG));
-      const bibs = all.items.filter((c) => c.tag === BIB_TAG);
+      let cites = all.items.filter((c) => (c.tag || "").startsWith(CITE_TAG));
+      let bibs = all.items.filter((c) => c.tag === BIB_TAG);
+      if (!bibs.length && await ensureBibliography(ctx, cites.length)) {
+        all.load("items/tag,items/font/name,items/font/size");
+        await ctx.sync();
+        cites = all.items.filter((c) => (c.tag || "").startsWith(CITE_TAG));
+        bibs = all.items.filter((c) => c.tag === BIB_TAG);
+      }
       const clusters = cites.map((c) => c.tag.slice(CITE_TAG.length).split(";").filter(Boolean));
       const f = await api("/format", { clusters, style: currentStyle() });
       const fonts = new Map([...cites, ...bibs].map((c) => [c, keepFont(c)]));
@@ -174,7 +252,9 @@ async function refreshAll() {
       status(`${cites.length} citation${cites.length === 1 ? "" : "s"} updated${missing}`);
     });
   } catch (e) {
-    status("Could not update: " + e.message);
+    report("update", e);
+    const where = e.debugInfo && e.debugInfo.errorLocation;
+    status("Could not update: " + e.message + (where ? ` (${where})` : ""));
   }
 }
 
@@ -183,8 +263,8 @@ Office.onReady(() => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(search, 150);
   });
-  $("cite").onclick = insertCitation;
-  $("bibliography").onclick = insertBibliography;
+  $("cite").onclick = () => guarded("insert the citation", insertCitation);
+  $("bibliography").onclick = () => guarded("insert the bibliography", insertBibliography);
   $("refresh").onclick = refreshAll;
   $("retry").onclick = connect;
   $("style").onchange = () => {

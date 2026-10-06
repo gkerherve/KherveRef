@@ -9,6 +9,8 @@ formatted in the chosen style. Nothing here writes to the library.
     GET  /api/search?q=...&limit=n   -> {"items": [{key, title, authors, year, ...}]}
     POST /api/format {"clusters": [[key, ...], ...], "style": id}
                                      -> {"citations": [html], "bibliography": [html]}
+    POST /api/log {"message": ...}   -> appends to word-panel.log (Word's own
+                                        errors, which the panel can't show in full)
 """
 from __future__ import annotations
 
@@ -20,7 +22,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, cite
+import datetime
+
+from . import __version__, cite, state
+
+LOG_NAME = "word-panel.log"
+LOG_LIMIT = 200_000
 
 PORT = 23120          # Zotero uses 23119
 # The panel's own files, also served here: Word for Mac's web view won't
@@ -118,6 +125,8 @@ class _Handler(BaseHTTPRequestHandler):
         return self._json({"error": "not found"}, 404)
 
     def do_POST(self):  # noqa: N802
+        if urlparse(self.path).path == "/api/log":
+            return self._log()
         if urlparse(self.path).path != "/api/format":
             return self._json({"error": "not found"}, 404)
         try:
@@ -132,6 +141,27 @@ class _Handler(BaseHTTPRequestHandler):
         return self._json({"citations": f.citations, "bibliography": f.bibliography,
                            "missing": sorted({k for c in clusters for k in c
                                               if k not in entries})})
+
+
+    def _log(self):
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        try:
+            msg = str(json.loads(self.rfile.read(min(n, 20_000)) or b"{}")
+                      .get("message", ""))[:4000]
+        except (ValueError, AttributeError):
+            return self._json({"error": "bad request"}, 400)
+        path = log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > LOG_LIMIT:
+            path.write_text("", encoding="utf-8")
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"{stamp} {msg}\n")
+        return self._json({"ok": True})
+
+
+def log_path() -> Path:
+    return state.state_dir() / LOG_NAME
 
 
 class WordServer:
