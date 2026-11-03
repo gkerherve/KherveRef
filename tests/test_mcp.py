@@ -91,3 +91,44 @@ def test_errors_are_tool_errors(lib):
 def test_explicit_library_and_none(tmp_path):
     out, err = call("search_references", {}, library_path=str(tmp_path / "none"))
     assert err and "No KherveRef library" in out["error"]
+
+
+def test_tools_are_described_for_claude(lib):
+    [_, reply] = rpc([
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}])
+    for t in reply["result"]["tools"]:
+        assert t["title"] and len(t["description"]) > 40
+        assert "readOnlyHint" in t["annotations"]
+        for name, prop in t["inputSchema"]["properties"].items():
+            assert prop.get("description"), (t["name"], name)
+
+
+def test_filters_styles_and_collections(lib):
+    call("add_reference", {"identifier": "10.1016/j.apsusc.2020.145000",
+                           "collection": "Chapter 2"})
+    out, _ = call("search_references", {"has_pdf": True})
+    assert out["total"] == 0
+    out, _ = call("search_references", {"has_pdf": False})
+    assert out["total"] == 1
+    out, _ = call("list_citation_styles")
+    assert any(s["id"] == "apa" for s in out["styles"])
+    out, err = call("format_citation", {"keys": ["smith2020surface"],
+                                        "style": "apa"})
+    assert not err and "2020" in out["citation"] and out["references"]
+    out, _ = call("remove_from_collection", {"keys": ["smith2020surface"],
+                                             "collection": "Chapter 2"})
+    assert out["removed"] == ["smith2020surface"]
+    out, _ = call("search_references", {"collection": "chapter 2"})
+    assert out["total"] == 0
+
+
+def test_helpful_errors(lib):
+    call("add_reference", {"identifier": "10.1016/j.apsusc.2020.145000"})
+    out, err = call("get_reference", {"key": "smith2020surfce"})
+    assert err and "smith2020surface" in out["error"]
+    out, err = call("search_references", {"qurey": "x"})
+    assert err and "query" in out["error"]
+    out, err = call("update_reference", {"key": "smith2020surface",
+                                         "fields": {"jornal": "x"}})
+    assert err and "journal" in out["error"]
