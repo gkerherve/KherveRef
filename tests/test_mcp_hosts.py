@@ -28,18 +28,20 @@ def test_refuses_to_overwrite_broken_json(tmp_path):
 
 
 def test_dialog_connects(qapp, tmp_path, monkeypatch):
-    from kherveref.mcp_dialog import McpDialog
+    from kherveref import mcp_dialog
     cfg = tmp_path / "c.json"
     host = mcp_hosts.Host.for_file(str(cfg))
-    host.key = "claude-desktop"
-    monkeypatch.setattr(mcp_hosts, "HOSTS", [host])
-    monkeypatch.setattr("kherveref.mcp_dialog.QMessageBox.information",
-                        lambda *a: None)
-    dlg = McpDialog()
-    [(_, status, button)] = dlg._rows
-    assert status.text() == "not connected" and button.text() == "Connect"
-    button.click()
-    assert status.text() == "connected" and button.text() == "Disconnect"
+    monkeypatch.setattr(mcp_dialog, "HOSTS", [host])
+    monkeypatch.setattr(host, "is_running", lambda: False)
+    monkeypatch.setattr(mcp_dialog.QMessageBox, "information", lambda *a: None)
+    dlg = mcp_dialog.McpDialog()
+    assert dlg._hosts.item(0).text().endswith("not connected")
+    assert "Not connected" in dlg._status.text()
+    dlg._connect_btn.click()
+    assert dlg._hosts.item(0).text().endswith("— connected")
+    assert dlg._disconnect_btn.isEnabled() and "Connected" in dlg._status.text()
+    dlg._flavour.setCurrentIndex(1)
+    assert dlg._snippet.toPlainText().startswith("claude mcp add kherveref")
     dlg.close()
 
 

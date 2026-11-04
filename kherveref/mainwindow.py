@@ -2064,7 +2064,7 @@ class MainWindow(QMainWindow):
 
     def _show_mcp_help(self) -> None:
         from .mcp_dialog import McpDialog
-        McpDialog(self).exec()
+        McpDialog(self, self.library).exec()
 
     def _about(self) -> None:
         QMessageBox.about(
