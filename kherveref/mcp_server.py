@@ -51,9 +51,11 @@ Work like this:
    cite them) and there is no delete tool: ask the user to delete in the app.
    References imported from a PDF may be marked needs_checking — verify them
    (search with needs_checking=true) and clear the flag once fixed.
-5. COLLECTIONS group references (e.g. by chapter): list_collections,
+5. TIDYING. find_duplicates lists references that look like the same work;
+   show the groups and let the user merge them in KherveRef.
+6. COLLECTIONS group references (e.g. by chapter): list_collections,
    add_to_collection, remove_from_collection.
-6. OUTPUT. export_bibtex gives BibLaTeX (default) or classic BibTeX;
+7. OUTPUT. export_bibtex gives BibLaTeX (default) or classic BibTeX;
    format_citation gives a formatted citation and reference list in any
    style from list_citation_styles (APA, Nature, IEEE, the user's journals).
 
@@ -183,6 +185,14 @@ TOOLS: list[dict] = [
                 "collection": _COLL,
                 "limit": _i("Most passages (default 8, max 30).")},
                ["query"]), _READ),
+    _tool("find_duplicates", "Find duplicates",
+          "Groups of references that look like the same work (same DOI, "
+          "arXiv id, ISBN or PDF, same title and year, or a near-identical "
+          "title by the same first author), with the reasons and a summary "
+          "of each. Read-only: show the groups to the user and let them "
+          "merge or delete in KherveRef — never cite both keys of a group.",
+          _obj({"collection": _s("Only look within this collection. "
+                                 "Optional.")}), _READ),
     _tool("list_collections", "List collections",
           "Collections (with their parent) and how many references each "
           "holds.", _obj({}), _READ),
@@ -397,6 +407,20 @@ class Tools:
         titles = {e.key: e.title for e in entries}
         return {"passages": [{"key": p.key, "page": p.page, "title": titles[p.key],
                               "text": p.text} for p in hits]}
+
+    def find_duplicates(self, collection: str = "") -> dict:
+        lib = self._lib()
+        entries = store.load_entries(lib)
+        chosen = list(entries.values())
+        if collection:
+            ids = store.collection_and_descendants(
+                store.load_collections(lib), self._collection_id(lib, collection))
+            chosen = [e for e in chosen if ids.intersection(e.collections)]
+        groups = store.find_duplicates(chosen)
+        return {"groups": len(groups), "duplicates": [
+            {"reasons": g["reasons"],
+             "references": [_summary(entries[k]) for k in g["keys"]]}
+            for g in groups]}
 
     def list_collections(self) -> dict:
         lib = self._lib()

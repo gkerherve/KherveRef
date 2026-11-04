@@ -8,6 +8,7 @@ match the entries.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import os
@@ -234,6 +235,62 @@ class DuplicateIndex:
         if t and _first_family(e):
             return self.title_author.get(f"{t}|{e.year}|{_first_family(e)}")
         return None
+
+
+def find_duplicates(entries) -> list[dict]:
+    """Groups of references that look like the same work, each with the
+    reasons: same DOI / arXiv id / ISBN / PDF, same title and year, or a
+    near-identical title (typos, punctuation) with the same year and first
+    author."""
+    entries = sorted(entries, key=lambda e: e.key)
+    parent = {e.key: e.key for e in entries}
+    reasons: dict[frozenset, set[str]] = {}
+
+    def root(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    def link(a, b, why):
+        if a != b:
+            parent[root(a)] = root(b)
+            reasons.setdefault(frozenset((a, b)), set()).add(why)
+
+    seen: dict[str, str] = {}
+    for e in entries:
+        t = normalize_title(e.title)
+        signals = [("same DOI", normalize_doi(e.doi) if e.doi else ""),
+                   ("same arXiv id", normalize_arxiv(e.eprint)
+                    if e.eprint and e.eprinttype == "arxiv" else ""),
+                   ("same ISBN", _isbn(e.isbn) if e.isbn else ""),
+                   ("same title and year",
+                    f"{t}|{e.year}" if len(t) > 12 else "")]
+        signals += [("same PDF", a.sha1) for a in e.files if a.sha1]
+        for why, sig in signals:
+            if sig:
+                link(e.key, seen.setdefault(f"{why}|{sig}", e.key), why)
+
+    buckets: dict[str, list[tuple[str, str]]] = {}
+    for e in entries:
+        t = normalize_title(e.title)
+        if len(t) > 12 and _first_family(e):
+            buckets.setdefault(f"{e.year}|{_first_family(e)}", []).append((e.key, t))
+    for items in buckets.values():
+        for i, (ka, ta) in enumerate(items):
+            for kb, tb in items[i + 1:]:
+                if ta != tb and difflib.SequenceMatcher(None, ta, tb).ratio() > 0.9:
+                    link(ka, kb, "near-identical title, same year and first author")
+
+    groups: dict[str, list[str]] = {}
+    for e in entries:
+        groups.setdefault(root(e.key), []).append(e.key)
+    out = []
+    for keys in groups.values():
+        if len(keys) > 1:
+            why = set().union(*(r for pair, r in reasons.items() if pair <= set(keys)))
+            out.append({"keys": keys, "reasons": sorted(why)})
+    return sorted(out, key=lambda g: g["keys"])
 
 
 def _first_family(e: Entry) -> str:

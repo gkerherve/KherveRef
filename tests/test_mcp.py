@@ -132,3 +132,9 @@ def test_helpful_errors(lib):
     out, err = call("update_reference", {"key": "smith2020surface",
                                          "fields": {"jornal": "x"}})
     assert err and "journal" in out["error"]
+
+
+def test_find_duplicates_tool(lib):
+    call("add_reference", {"identifier": "10.1016/j.apsusc.2020.145000"})
+    out, err = call("find_duplicates")
+    assert not err and out == {"groups": 0, "duplicates": []}

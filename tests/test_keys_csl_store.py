@@ -124,3 +124,28 @@ def test_short_title_duplicate_needs_same_author():
                           authors=[Person("Kerherve")])) == "k"
     assert idx.find(Entry(title="My thesis", date="2019",
                           authors=[Person("Other")])) is None
+
+
+def test_find_duplicates():
+    from kherveref.model import Attachment, Person
+
+    def mk(key, title, year="2020", family="Smith", **kw):
+        e = Entry(key=key, title=title, date=year,
+                  authors=[Person(family, "J.")])
+        for k, v in kw.items():
+            setattr(e, k, v)
+        return e
+    entries = [
+        mk("a", "Surface chemistry of titania films", doi="10.1/X"),
+        mk("b", "Something else entirely", doi="https://doi.org/10.1/x"),
+        mk("c", "Surface chemistry of titania film"),
+        mk("d", "Surface chemistry of titania film", year="2019"),
+        mk("e", "Unrelated paper on gold clusters"),
+        mk("f", "Another one", files=[Attachment(path="x.pdf", sha1="abc")]),
+        mk("g", "Yet another", files=[Attachment(path="y.pdf", sha1="abc")]),
+    ]
+    groups = store.find_duplicates(entries)
+    assert [g["keys"] for g in groups] == [["a", "b", "c"], ["f", "g"]]
+    assert "same DOI" in groups[0]["reasons"]
+    assert any("near-identical" in r for r in groups[0]["reasons"])
+    assert groups[1]["reasons"] == ["same PDF"]
