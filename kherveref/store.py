@@ -293,6 +293,33 @@ def find_duplicates(entries) -> list[dict]:
     return sorted(out, key=lambda g: g["keys"])
 
 
+def merge_entries(lib: Library, entries: dict[str, Entry], keep: str,
+                  others: list[str]) -> Entry:
+    """Fold *others* into *keep*: fill its missing fields, take their
+    PDFs (one copy per file), collections and keywords, append their
+    notes, then delete them. Keys of the merged-away references are
+    listed in the kept one's notes, since documents may still cite them."""
+    k = entries[keep]
+    hashes = {a.sha1 for a in k.files if a.sha1}
+    for key in others:
+        o = entries.pop(key)
+        k.merge_missing(o)
+        for a in o.files:
+            if not a.sha1 or a.sha1 not in hashes:
+                k.files.append(a)
+                hashes.add(a.sha1)
+        o.files = [a for a in o.files if a not in k.files]
+        k.collections += [c for c in o.collections if c not in k.collections]
+        k.keywords += [w for w in o.keywords if w not in k.keywords]
+        if o.notes and o.notes not in k.notes:
+            k.notes = f"{k.notes}\n\n{o.notes}".strip()
+        k.needs_review = k.needs_review and o.needs_review
+        delete_entry(lib, o)
+    k.notes = (f"{k.notes}\n\nMerged from: {', '.join(others)}").strip()
+    save_entry(lib, k)
+    return k
+
+
 def _first_family(e: Entry) -> str:
     people = e.authors or e.editors
     return normalize_title(people[0].short()) if people else ""

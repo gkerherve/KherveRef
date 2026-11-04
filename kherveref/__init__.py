@@ -5,7 +5,7 @@ from pathlib import Path
 
 # "<major>.<minor>" only: the patch (.N commit count) and +sha7 are
 # appended from pygit2 at runtime. See CLAUDE.md for when to bump.
-__version__ = "0.27"
+__version__ = "0.28"
 
 
 # A frozen build has no .git: packaging stamps "<commit_count>+<sha7>"

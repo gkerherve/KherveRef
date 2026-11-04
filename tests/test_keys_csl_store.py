@@ -149,3 +149,25 @@ def test_find_duplicates():
     assert "same DOI" in groups[0]["reasons"]
     assert any("near-identical" in r for r in groups[0]["reasons"])
     assert groups[1]["reasons"] == ["same PDF"]
+
+
+def test_merge_entries(tmp_path):
+    from kherveref.model import Attachment
+    lib = library.create_library(tmp_path / "lib", "L")
+    a = Entry(key="a", title="T", date="2020", collections=["c1"],
+              keywords=["x"], files=[Attachment("PDFs/a.pdf", "h1")])
+    b = Entry(key="b", title="T", doi="10.1/x", collections=["c2"],
+              keywords=["x", "y"], notes="read me", needs_review=True,
+              files=[Attachment("PDFs/b.pdf", "h1"),
+                     Attachment("PDFs/b2.pdf", "h2")])
+    entries = {"a": a, "b": b}
+    for e in entries.values():
+        store.save_entry(lib, e)
+    k = store.merge_entries(lib, entries, "a", ["b"])
+    assert list(entries) == ["a"] and k.doi == "10.1/x" and k.title == "T"
+    assert [f.path for f in k.files] == ["PDFs/a.pdf", "PDFs/b2.pdf"]
+    assert k.collections == ["c1", "c2"] and k.keywords == ["x", "y"]
+    assert "read me" in k.notes and "Merged from: b" in k.notes
+    assert not k.needs_review
+    assert not store.entry_path(lib, "b").exists()
+    assert set(store.load_entries(lib)) == {"a"}

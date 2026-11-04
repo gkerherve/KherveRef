@@ -27,6 +27,7 @@ from . import (bibtex, cite, csl, git_backend, icons, importer, library, links,
 from . import version_string
 from .ai_panel import AIPanel, AISetupDialog, AskLibraryDialog
 from .covers import CoversView
+from .dup_dialog import DuplicatesDialog
 from .editor import EntryEditor
 from .icons import icon
 from .jobs import ImportJob, LookupJob, SummaryDialog
@@ -445,6 +446,10 @@ class MainWindow(QMainWindow):
             view_group.addAction(a)
 
         self.act_history = A("&History…", self._show_history, "history")
+        self.act_duplicates = A(
+            "Find &duplicates…", self._find_duplicates, "duplicates",
+            tip="References that look like the same work (same DOI, PDF or "
+                "title) — compare and merge them")
         self.act_remote = A("Set &remote…", self._set_remote, "remote")
         self.act_pull = A("&Pull", lambda: self._run_git(git_backend.pull, "Pull"),
                           "pull", None, "Get changes from the library's Git remote")
@@ -473,7 +478,7 @@ class MainWindow(QMainWindow):
             self.act_new_ref,
             self.act_export_biblatex, self.act_export_bibtex, self.act_export_csl,
             self.act_paste, self.act_find, self.act_lookup_review,
-            self.act_new_collection, self.act_history, self.act_remote,
+            self.act_new_collection, self.act_history, self.act_duplicates, self.act_remote,
             self.act_ai_ask,
             self.act_pull, self.act_push]
         self._selection_actions = [
@@ -547,6 +552,7 @@ class MainWindow(QMainWindow):
         m_keys.addSeparator()
         m_keys.addAction(self.act_rekey_all)
         m.addSeparator()
+        m.addAction(self.act_duplicates)
         m.addAction(self.act_history)
         m.addSeparator()
         m.addActions([self.act_remote, self.act_pull, self.act_push])
@@ -1759,6 +1765,29 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     # Git                                                                  #
     # ------------------------------------------------------------------ #
+
+    def _find_duplicates(self) -> None:
+        if not self.library:
+            return
+        self._flush_editor()
+        dlg = DuplicatesDialog(self.entries, self)
+        dlg.show_keys.connect(self._show_duplicate_group)
+        dlg.merge.connect(lambda keep, others: (
+            self._merge_duplicates(keep, others), dlg.refresh(self.entries)))
+        self._dup_dialog = dlg
+        dlg.show()
+
+    def _show_duplicate_group(self, keys: list[str]) -> None:
+        if self._scope != ALL:
+            self._tree.setCurrentItem(self._tree.topLevelItem(0))
+        self._search.clear()
+        self._select_keys(keys)
+
+    def _merge_duplicates(self, keep: str, others: list[str]) -> None:
+        self._editor.set_entry(None)
+        store.merge_entries(self.library, self.entries, keep, others)
+        self._commit(f"Merge {', '.join(others)} into {keep}")
+        self._reload([keep])
 
     def _show_history(self) -> None:
         if self.library:

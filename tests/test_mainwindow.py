@@ -158,3 +158,27 @@ def test_ai_menu_and_guide(win, monkeypatch):
                         staticmethod(lambda url: opened.append(url)))
     win._open_guide()
     assert opened and opened[0].toLocalFile().endswith("docs/guide/index.html")
+
+
+def test_find_and_merge_duplicates(win):
+    from kherveref.model import Entry
+    for k in ("dup1", "dup2"):
+        e = Entry(key=k, title="Surface chemistry of titania films",
+                  date="2020", doi="10.1/same")
+        win.entries[k] = e
+        store.save_entry(win.library, e)
+    win._commit("two copies")
+    win._reload()
+    win._find_duplicates()
+    dlg = win._dup_dialog
+    assert dlg._tree.topLevelItemCount() == 1
+    group = dlg._tree.topLevelItem(0)
+    dlg._tree.setCurrentItem(group.child(1))
+    dlg._show()
+    assert sorted(win.selected_keys()) == ["dup1", "dup2"]
+    win._merge_duplicates("dup2", ["dup1"])
+    dlg.refresh(win.entries)
+    assert list(win.entries) == ["dup2"]
+    assert dlg._tree.topLevelItemCount() == 0
+    assert git_backend.history(win.library.root)[0][3] == "Merge dup1 into dup2"
+    dlg.close()

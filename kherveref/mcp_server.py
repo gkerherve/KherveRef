@@ -52,7 +52,8 @@ Work like this:
    References imported from a PDF may be marked needs_checking — verify them
    (search with needs_checking=true) and clear the flag once fixed.
 5. TIDYING. find_duplicates lists references that look like the same work;
-   show the groups and let the user merge them in KherveRef.
+   show the groups; the user merges them in KherveRef (Library ▸ Find
+   duplicates…).
 6. COLLECTIONS group references (e.g. by chapter): list_collections,
    add_to_collection, remove_from_collection.
 7. OUTPUT. export_bibtex gives BibLaTeX (default) or classic BibTeX;
