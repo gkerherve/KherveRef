@@ -72,6 +72,7 @@ def main() -> int:
     win = MainWindow(theme_name=theme_name)
     server = ipc.Server(app)
     server.request.connect(win.handle_request)
+    server.answer = win.answer_query
     app.installEventFilter(_FileOpenFilter(win))
     from . import library
     if request.get("cmd") == "open" and library.is_library(request["paths"][0]):

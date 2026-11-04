@@ -1,5 +1,9 @@
 import io
 import json
+import os
+import socket
+import sys
+import threading
 
 import pytest
 
@@ -138,3 +142,67 @@ def test_find_duplicates_tool(lib):
     call("add_reference", {"identifier": "10.1016/j.apsusc.2020.145000"})
     out, err = call("find_duplicates")
     assert not err and out == {"groups": 0, "duplicates": []}
+
+
+def test_status_without_window(lib):
+    out, err = call("get_status")
+    assert not err and out["library"]["name"] == "Thesis"
+    assert out["window"]["open"] is False
+    out, err = call("show_in_window", {"keys": ["x"]})
+    assert err
+
+
+def test_view_page_is_an_image(lib, tmp_path):
+    pdf = make_pdf(tmp_path / "a.pdf", ["arXiv:2101.00001"])
+    call("add_pdf", {"path": str(pdf)})
+    [reply] = rpc([{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": {"name": "view_page",
+                               "arguments": {"key": "martin2021preprint"}}}])
+    image, text = reply["result"]["content"]
+    assert image["type"] == "image" and image["mimeType"] == "image/png"
+    import base64
+    assert base64.b64decode(image["data"])[:4] == b"\x89PNG"
+    assert json.loads(text["text"])["page"] == 1
+    out, err = call("view_page", {"key": "martin2021preprint", "page": 99})
+    assert err and "pages 1-" in out["error"]
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Unix socket")
+def test_tools_reach_the_window(lib, tmp_path):
+    asked = []
+
+    def window(conn):
+        with conn:
+            req = json.loads(conn.makefile("rb").readline())
+            asked.append(req)
+            answer = ({"library": str(lib.root), "selected": ["k1"],
+                       "collection": ""} if req["what"] == "status"
+                      else {"shown": req["keys"]})
+            conn.sendall(json.dumps(answer).encode() + b"\n")
+
+    path = f"/tmp/kref-test-{os.getpid()}.sock"
+    srv = socket.socket(socket.AF_UNIX)
+    srv.bind(path)
+    srv.listen()
+
+    def loop():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            window(conn)
+    threading.Thread(target=loop, daemon=True).start()
+    state.set_window_socket(path)
+    try:
+        call("add_reference", {"identifier": "10.1016/j.apsusc.2020.145000"})
+        out, err = call("get_status")
+        assert not err and out["window"]["open"]
+        assert out["window"]["showing_this_library"]
+        out, err = call("show_in_window", {"keys": ["smith2020surface"]})
+        assert not err and out["shown"] == ["smith2020surface"]
+        assert asked[-1]["cmd"] == "query" and asked[-1]["library"] == str(lib.root)
+    finally:
+        state.set_window_socket(None)
+        srv.close()
+        os.unlink(path)

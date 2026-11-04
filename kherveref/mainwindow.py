@@ -456,7 +456,7 @@ class MainWindow(QMainWindow):
         self.act_push = A("P&ush", lambda: self._run_git(git_backend.push, "Push"),
                           "push", None, "Send this library's changes to its Git remote")
         self.act_about = A("&About KherveRef", self._about, "about")
-        self.act_claude = A("&Connect to Claude (MCP)…", self._show_mcp_help, "claude",
+        self.act_claude = A("&Connect to Claude…", self._show_mcp_help, "claude",
                             None, "Let Claude search, add, edit and export "
                                   "your references")
         self.act_ai_summary = A("&Summarise this paper", self._ai_summarise, "ai",
@@ -1322,6 +1322,41 @@ class MainWindow(QMainWindow):
                 "Add it?") == QMessageBox.Yes:
             self.import_paths(paths[:1], self._target_collection())
 
+    def answer_query(self, req: dict) -> dict:
+        """What Claude asks the open window through the MCP server."""
+        what = req.get("what")
+        if what == "status":
+            scope = next((c.name for c in self.collections
+                          if c.id == self._scope), "")
+            return {"library": str(self.library.root) if self.library else None,
+                    "selected": self.selected_keys() if self.library else [],
+                    "collection": scope}
+        if self.library is None:
+            return {"error": "The KherveRef window has no library open."}
+        if req.get("library") and Path(req["library"]).resolve() != \
+                self.library.root.resolve():
+            return {"error": "The KherveRef window shows another library: "
+                             f"{self.library.root}"}
+        if what == "show":
+            keys = [k for k in req.get("keys", []) if k in self.entries]
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+            self._scope = ALL
+            self._search.clear()
+            self._rebuild_tree()
+            self._select_keys(keys)
+            return {"shown": keys}
+        if what == "open_pdf":
+            e = self.entries.get(req.get("key", ""))
+            pdf = next((a for a in e.files if a.path.lower().endswith(".pdf")),
+                       None) if e else None
+            if pdf is None:
+                return {"error": f"{req.get('key')} has no PDF"}
+            return {"opened_in": links.open_document(
+                store.file_path(self.library, pdf), self)}
+        return {"error": f"Unknown request {what!r}"}
+
     def find_by_file(self, path: Path) -> str | None:
         """The reference whose attachment is *path* (or an identical copy)."""
         path = Path(path)
@@ -2028,32 +2063,8 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(url)
 
     def _show_mcp_help(self) -> None:
-        import sys as _sys
-        if getattr(_sys, "frozen", False):
-            cmd = [_sys.executable, "--mcp-server"]
-        else:
-            cmd = [_sys.executable, "-m", "kherveref.mcp_server"]
-        lib = ["--library", str(self.library.root)] if self.library else []
-        cfg = json.dumps({"mcpServers": {"kherveref": {
-            "command": cmd[0], "args": cmd[1:] + lib}}}, indent=2)
-        cli = "claude mcp add kherveref -- " + " ".join(
-            f'"{c}"' if " " in c else c for c in cmd + lib)
-        box = QMessageBox(self)
-        box.setWindowTitle("Use KherveRef with Claude")
-        box.setTextFormat(Qt.RichText)
-        box.setText(
-            "Claude can search, add, edit and export your references through "
-            "KherveRef's MCP server. It works on the library folder directly, "
-            "so this window need not be open.<br><br>"
-            "<b>Claude Code</b> — run:<br><code>" + cli.replace("&", "&amp;")
-            .replace("<", "&lt;") + "</code><br><br>"
-            "<b>Claude Desktop</b> — add to claude_desktop_config.json:"
-            "<pre>" + cfg.replace("&", "&amp;").replace("<", "&lt;") + "</pre>")
-        copy = box.addButton("Copy Claude Code command", QMessageBox.ActionRole)
-        box.addButton(QMessageBox.Close)
-        box.exec()
-        if box.clickedButton() is copy:
-            QApplication.clipboard().setText(cli)
+        from .mcp_dialog import McpDialog
+        McpDialog(self).exec()
 
     def _about(self) -> None:
         QMessageBox.about(

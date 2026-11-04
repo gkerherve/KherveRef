@@ -75,3 +75,20 @@ def test_annotations(tmp_path):
     notes = annotations_as_notes(path)
     assert "p. 1 “photocatalytic” — key claim" in notes
     assert "p. 1 check the band gap" in notes
+
+
+def test_query_gets_the_windows_answer(qapp, monkeypatch):
+    # The asker is the Qt-free MCP server, in another thread here.
+    import threading
+    monkeypatch.setenv("KHERVEREF_IPC_NAME", f"kherveref-q-{os.getpid()}")
+    server = ipc.Server(qapp)
+    server.answer = lambda req: {"echo": req["what"]}
+    got = []
+    t = threading.Thread(target=lambda: got.append(ipc.query({"what": "status"})))
+    t.start()
+    deadline = time.monotonic() + 15
+    while t.is_alive() and time.monotonic() < deadline:
+        qapp.processEvents()
+    server.close()
+    assert got == [{"echo": "status"}]
+    assert ipc.query({"what": "status"}) is None    # socket forgotten on close

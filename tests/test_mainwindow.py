@@ -182,3 +182,20 @@ def test_find_and_merge_duplicates(win):
     assert dlg._tree.topLevelItemCount() == 0
     assert git_backend.history(win.library.root)[0][3] == "Merge dup1 into dup2"
     dlg.close()
+
+
+def test_window_answers_mcp_queries(win):
+    from kherveref.model import Entry
+    e = Entry(key="k1", title="A paper", date="2020")
+    win.entries["k1"] = e
+    store.save_entry(win.library, e)
+    win._commit("one")
+    win._reload(["k1"])
+    status = win.answer_query({"what": "status"})
+    assert status["library"] == str(win.library.root)
+    assert status["selected"] == ["k1"]
+    assert win.answer_query({"what": "show", "keys": ["k1", "nope"]}) == \
+        {"shown": ["k1"]}
+    assert "error" in win.answer_query({"what": "show", "keys": [],
+                                        "library": "/elsewhere"})
+    assert "no PDF" in win.answer_query({"what": "open_pdf", "key": "k1"})["error"]
