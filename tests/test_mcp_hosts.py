@@ -41,3 +41,18 @@ def test_dialog_connects(qapp, tmp_path, monkeypatch):
     button.click()
     assert status.text() == "connected" and button.text() == "Disconnect"
     dlg.close()
+
+
+def test_running_app_seen_when_pgrep_is_blind(monkeypatch):
+    import subprocess
+    import sys
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def run(args, **kw):
+        out = ("/Applications/Claude.app/Contents/MacOS/Claude\n"
+               if args[0] == "ps" else "")
+        return subprocess.CompletedProcess(args, 1 if args[0] == "pgrep" else 0,
+                                           out, "")
+    monkeypatch.setattr(mcp_hosts.subprocess, "run", run)
+    assert mcp_hosts.host_by_key("claude-desktop").is_running()
+    assert not mcp_hosts.host_by_key("cursor").is_running()
