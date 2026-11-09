@@ -6,7 +6,7 @@
 # (at your option) any later version.
 """The KherveRef application mark (window / taskbar icon).
 
-A "Kref" wordmark above an open book with a bookmark ribbon on a
+A "kRef" wordmark above an open book with a bookmark ribbon on a
 rounded teal tile, in the shared Kherve-family style (cf. KhervePDF's
 appmark): the symbol is a stroked vector path, so it stays crisp from
 16 px to 256 px.
@@ -95,7 +95,7 @@ def paint(size: int) -> QPixmap:
     p.setRenderHint(QPainter.Antialiasing)
     rect = _tile(p, float(size))
     x, y, w, h = rect.x(), rect.y(), rect.width(), rect.height()
-    _wordmark(p, QRectF(x, y + h * 0.05, w, h * 0.44), "Kref")
+    _wordmark(p, QRectF(x, y + h * 0.05, w, h * 0.44), "kRef")
     bw, bh = w * 0.56, h * 0.36
     _open_book(p, QRectF(x + (w - bw) / 2.0, y + h * 0.54, bw, bh))
     p.end()
